@@ -12,6 +12,8 @@ struct LeaderboardView: View {
     @State private var isSaving = false
     @State private var savedName = ""
     @State private var savedLink = ""
+    @State private var nameTaken = false
+    @State private var showScores = false
 
     private var bgColor: Color { colorScheme == .dark ? Color(white: 0.1) : .white }
     private var textColor: Color { colorScheme == .dark ? Color(white: 0.85) : Color(white: 0.2) }
@@ -23,23 +25,32 @@ struct LeaderboardView: View {
         self.onSave = onSave
     }
 
+    private let tabIcons = [["trophy", "trophy.fill"], ["person", "person.fill"], ["info.circle", "info.circle.fill"]]
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                textTab("Scores", tab: 0)
-                textTab("Profile", tab: 1)
-                textTab("Info", tab: 2)
-            }
-            .padding(.top, 28)
-            .padding(.bottom, 44)
-
-            Group {
-                switch selectedTab {
-                case 1: profileContent
-                case 2: infoContent
-                default: leaderboardContent
+            HStack(spacing: 32) {
+                ForEach(0..<3) { i in
+                    Button {
+                        withAnimation { selectedTab = i }
+                    } label: {
+                        Image(systemName: tabIcons[i][selectedTab == i ? 1 : 0])
+                            .font(.system(size: i == 0 ? 24 : 26))
+                            .foregroundStyle(textColor.opacity(selectedTab == i ? 1 : 0.2))
+                            .animation(.easeInOut(duration: 0.2), value: selectedTab)
+                    }
                 }
             }
+            .padding(.top, 28)
+            .padding(.bottom, 24)
+
+            TabView(selection: $selectedTab) {
+                scoresPage.padding(.top, 12).tag(0)
+                profilePage.padding(.top, 12).tag(1)
+                infoPage.padding(.top, 12).tag(2)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .ignoresSafeArea(edges: .bottom)
         }
         .background(bgColor.ignoresSafeArea())
         .fontDesign(.rounded)
@@ -48,32 +59,35 @@ struct LeaderboardView: View {
             savedLink = playerLink
             await loadEntries()
             isLoading = false
-        }
-    }
-
-    // MARK: - Navigation
-
-    private func textTab(_ title: String, tab: Int) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
-        } label: {
-            VStack(spacing: 6) {
-                Text(title.uppercased())
-                    .font(.system(size: 14, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(selectedTab == tab ? textColor : textColor.opacity(0.2))
-                Circle()
-                    .fill(selectedTab == tab ? textColor : .clear)
-                    .frame(width: 4, height: 4)
+            withAnimation(.easeOut(duration: 0.5)) {
+                showScores = true
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
         }
     }
 
-    // MARK: - Leaderboard
+    // MARK: - Helpers
 
-    private var leaderboardContent: some View {
+    private var dashedLine: some View {
+        Line()
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            .foregroundStyle(textColor.opacity(0.12))
+            .frame(height: 1)
+    }
+
+    private var plainLine: some View {
+        Line()
+            .stroke(lineWidth: 1)
+            .foregroundStyle(textColor.opacity(0.12))
+            .frame(height: 1)
+    }
+
+    private func initialLetter(_ name: String) -> String {
+        String(name.prefix(1)).uppercased()
+    }
+
+    // MARK: - Scores
+
+    private var scoresPage: some View {
         Group {
             if isLoading {
                 ProgressView()
@@ -85,8 +99,44 @@ struct LeaderboardView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                            leaderboardRow(index: index, entry: entry)
+                        Text("Top Scores")
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(textColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.bottom, 16)
+                            .offset(y: showScores ? 0 : 12)
+                            .opacity(showScores ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.05), value: showScores)
+                        if let first = entries.first {
+                            championCard(first)
+                                .padding(.top, 16)
+                                .padding(.bottom, 24)
+                                .offset(y: showScores ? 0 : 16)
+                                .opacity(showScores ? 1 : 0)
+                                .animation(.easeOut(duration: 0.45).delay(0.12), value: showScores)
+                        }
+
+                        if entries.count > 1 {
+                            HStack(spacing: 12) {
+                                plainLine
+                                Text("HALL OF FAME")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .tracking(1.5)
+                                    .foregroundStyle(textColor.opacity(0.3))
+                                plainLine
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 24)
+                            .offset(y: showScores ? 0 : 12)
+                            .opacity(showScores ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.22), value: showScores)
+                        }
+
+                        ForEach(Array(entries.dropFirst().enumerated()), id: \.element.id) { offset, entry in
+                            restRow(rank: offset + 2, entry: entry)
+                                .offset(y: showScores ? 0 : 12)
+                                .opacity(showScores ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.28 + Double(offset) * 0.05), value: showScores)
                         }
                     }
                 }
@@ -95,29 +145,74 @@ struct LeaderboardView: View {
         }
     }
 
-    private func leaderboardRow(index: Int, entry: ScoreEntry) -> some View {
-        HStack(spacing: 12) {
-            rankBadge(index + 1)
+    private func championCard(_ entry: ScoreEntry) -> some View {
+        linkWrapper(entry) {
+            VStack(spacing: 8) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(textColor)
 
-            playerLabel(entry)
-                .font(index == 0 ? .body.weight(.bold) : .body.weight(.medium))
+                HStack(spacing: 4) {
+                    Text(entry.playerName)
+                    if entry.link != nil && !entry.link!.isEmpty {
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption2)
+                    }
+                }
+                .font(.body.weight(.bold))
+                .foregroundStyle(textColor)
                 .lineLimit(1)
 
-            Spacer()
+                Text("\(entry.score)")
+                    .font(.system(size: 28, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(textColor)
+            }
+        }
+    }
 
-            Text("\(entry.score)")
-                .font(index == 0 ? .title3.monospacedDigit().bold() : .body.monospacedDigit().weight(.medium))
-                .foregroundStyle(index == 0 ? textColor : textColor.opacity(0.7))
+    private func restRow(rank: Int, entry: ScoreEntry) -> some View {
+        linkWrapper(entry) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(textColor.opacity(0.08))
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        Text("\(rank)")
+                            .font(.system(size: 12, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(textColor.opacity(0.5))
+                    )
+
+                HStack(spacing: 4) {
+                    Text(entry.playerName)
+                    if entry.link != nil && !entry.link!.isEmpty {
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption2)
+                    }
+                }
+                .font(.body.weight(.medium))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
+
+                Spacer()
+
+                Text("\(entry.score)")
+                    .font(.body.monospacedDigit().weight(.medium))
+                    .foregroundStyle(textColor.opacity(0.5))
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
     }
 
-    private func rankBadge(_ rank: Int) -> some View {
-        Text("\(rank)")
-            .font(.subheadline.monospacedDigit().bold())
-            .foregroundStyle(textColor.opacity(rank == 1 ? 1 : 0.25))
-            .frame(width: 24, alignment: .trailing)
+    @ViewBuilder
+    private func linkWrapper<Content: View>(_ entry: ScoreEntry, @ViewBuilder content: () -> Content) -> some View {
+        if let link = entry.link, !link.isEmpty, let url = URL(string: link) {
+            Link(destination: url) { content() }
+        } else {
+            content()
+        }
     }
 
     // MARK: - Profile
@@ -126,12 +221,28 @@ struct LeaderboardView: View {
         playerName != savedName || playerLink != savedLink
     }
 
-    private var profileContent: some View {
+    private var profilePage: some View {
         ScrollView {
-            VStack(spacing: 36) {
-                VStack(spacing: 24) {
-                    profileField("Username", text: $playerName, placeholder: "Enter a name")
-                    profileField("Link", text: $playerLink, placeholder: "Optional", keyboard: .URL)
+            VStack(spacing: 0) {
+                Text("Profile")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(textColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+
+                Text("Displayed on Top Scores.")
+                    .font(.body)
+                    .foregroundStyle(textColor.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+
+                VStack(spacing: 10) {
+                    profileField(icon: "person.fill", text: $playerName, placeholder: "Username", capitalization: .words, status: nameTaken ? .error : nil)
+                        .onChange(of: playerName) { nameTaken = false }
+                    profileField(icon: "link", text: $playerLink, placeholder: "Link (optional)", keyboard: .URL)
                 }
                 .padding(.horizontal, 20)
 
@@ -139,18 +250,23 @@ struct LeaderboardView: View {
                     Button {
                         guard !playerName.isEmpty else { return }
                         isSaving = true
+                        nameTaken = false
                         Task {
-                            await onSave?()
-                            _ = try? await API.updateProfile(
-                                playerName: playerName,
-                                link: playerLink.isEmpty ? nil : playerLink,
-                                deviceId: deviceId
-                            )
-                            await loadEntries()
-                            savedName = playerName
-                            savedLink = playerLink
+                            do {
+                                await onSave?()
+                                try await API.updateProfile(
+                                    playerName: playerName,
+                                    link: playerLink.isEmpty ? nil : playerLink,
+                                    deviceId: deviceId
+                                )
+                                await loadEntries()
+                                savedName = playerName
+                                savedLink = playerLink
+                                selectedTab = 0
+                            } catch APIError.nameTaken {
+                                nameTaken = true
+                            } catch {}
                             isSaving = false
-                            selectedTab = 0
                         }
                     } label: {
                         Group {
@@ -168,55 +284,70 @@ struct LeaderboardView: View {
                         .background(playerName.isEmpty ? textColor.opacity(0.15) : textColor, in: Capsule())
                     }
                     .disabled(playerName.isEmpty || isSaving)
+                    .padding(.top, 36)
                 }
 
-                Text("Visible on the leaderboard")
-                    .font(.footnote)
-                    .foregroundStyle(textColor.opacity(0.3))
             }
         }
     }
 
-    private func profileField(_ label: String, text: Binding<String>, placeholder: String, keyboard: UIKeyboardType = .default) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(textColor.opacity(0.4))
+    enum FieldStatus { case error }
+
+    private func profileField(icon: String, text: Binding<String>, placeholder: String, keyboard: UIKeyboardType = .default, capitalization: TextInputAutocapitalization = .never, status: FieldStatus? = nil) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(status == .error ? .red.opacity(0.8) : textColor)
+                .frame(width: 36, height: 36)
+                .overlay(
+                    Image(systemName: status == .error ? "xmark" : icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(status == .error ? .white : bgColor)
+                )
+
             TextField(placeholder, text: text)
                 .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
+                .textInputAutocapitalization(capitalization)
                 .keyboardType(keyboard)
+                .font(.body.weight(.medium))
                 .foregroundStyle(textColor)
-                .padding(.bottom, 8)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(textColor.opacity(0.1))
-                        .frame(height: 1)
-                }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background((status == .error ? Color.red.opacity(0.08) : textColor.opacity(0.06)), in: RoundedRectangle(cornerRadius: 12))
+        .animation(.easeInOut(duration: 0.2), value: status == .error)
     }
 
     // MARK: - Info
 
-    private var infoContent: some View {
+    private var infoPage: some View {
         GeometryReader { geo in
             ScrollView {
-                VStack(spacing: 24) {
-                    Text("Gribli is a free, open-source match-3 puzzle game. No ads, no tracking, no in-app purchases — just swap, match, and chase the high score.\n\nBuilt by a \"solo\" indie developer (with me), with SwiftUI, too much coffee, and the help of Claude Code — an overly enthusiastic AI who also picked the name.\n\nAnd guess who wrote this text?")
-                        .font(.body)
-                        .foregroundStyle(textColor.opacity(0.8))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(spacing: 28) {
+                    Text("About Gribli")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(textColor)
+                        .frame(maxWidth: .infinity)
 
-                    Text("(My human says it's a decent game!)")
+                    Text("Gribli is a free, open-source match-3 puzzle game. No ads, no tracking, no in-app purchases — just swap, match, and chase the high score.")
                         .font(.body)
                         .foregroundStyle(textColor.opacity(0.8))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .frame(maxWidth: .infinity)
 
                     Spacer()
 
-                    VStack(spacing: 0) {
-                        infoLink("Made by Patrice (& Claude)", url: "https://x.com/patricecassard")
-                        infoLink("Source on GitHub", url: "https://github.com/cassardp/gribli")
+                    VStack(spacing: 10) {
+                        infoLink(
+                            icon: "at",
+                            label: "Follow me on X",
+                            url: "https://x.com/patricecassard"
+                        )
+                        infoLink(
+                            icon: "pin.fill",
+                            label: "Try also Pinpin",
+                            url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154"
+                        )
                     }
 
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")")
@@ -230,46 +361,44 @@ struct LeaderboardView: View {
         }
     }
 
-    private func infoLink(_ label: String, url: String) -> some View {
+    private func infoLink(icon: String, label: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
-            HStack {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(textColor)
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(bgColor)
+                    )
+
                 Text(label)
-                    .font(.body)
+                    .font(.body.weight(.medium))
+
                 Spacer()
+
                 Image(systemName: "arrow.up.right")
-                    .font(.caption2)
+                    .font(.system(size: 11))
+                    .opacity(0.4)
             }
             .foregroundStyle(textColor)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 4)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(textColor.opacity(0.1))
-                    .frame(height: 1)
-            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(textColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
     private func loadEntries() async {
         entries = (try? await API.loadScores()) ?? []
     }
+}
 
-    // MARK: - Shared
-
-    @ViewBuilder
-    private func playerLabel(_ entry: ScoreEntry) -> some View {
-        if let link = entry.link, !link.isEmpty, let url = URL(string: link) {
-            Link(destination: url) {
-                HStack(spacing: 4) {
-                    Text(entry.playerName)
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption2)
-                }
-                .foregroundStyle(textColor)
-            }
-        } else {
-            Text(entry.playerName)
-                .foregroundStyle(textColor)
+private struct Line: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { p in
+            p.move(to: CGPoint(x: 0, y: rect.midY))
+            p.addLine(to: CGPoint(x: rect.width, y: rect.midY))
         }
     }
 }
