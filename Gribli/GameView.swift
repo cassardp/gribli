@@ -146,14 +146,17 @@ struct GameView: View {
                     if isUrgent && !viewModel.isPaused {
                         Text("\(Int(viewModel.timeRemaining))")
                             .font(.title.monospacedDigit().bold())
-                            .foregroundStyle(.red)
-                            .phaseAnimator([false, true], trigger: Int(viewModel.timeRemaining)) { content, pulse in
-                                content.scaleEffect(pulse ? 1.2 : 1.0)
-                            } animation: { _ in
-                                .easeInOut(duration: 0.4)
-                            }
+                            .foregroundStyle(bgColor)
+                            .contentTransition(.numericText())
+                            .animation(.spring(duration: 0.3), value: Int(viewModel.timeRemaining))
                             .padding(20)
-                            .background(bgColor.opacity(0.4), in: Circle())
+                            .background(.red, in: Circle())
+                            .keyframeAnimator(initialValue: CGFloat(1.0), trigger: Int(viewModel.timeRemaining)) { content, scale in
+                                content.scaleEffect(scale)
+                            } keyframes: { _ in
+                                SpringKeyframe(1.15, duration: 0.15, spring: .bouncy)
+                                SpringKeyframe(1.0, duration: 0.3, spring: .smooth)
+                            }
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -189,7 +192,7 @@ struct GameView: View {
                     leaderboardProfileMode = 0
                     showLeaderboard = true
                 } label: {
-                    Image(systemName: "star")
+                    Image(systemName: "trophy")
                         .font(.title)
                         .foregroundStyle(textColor)
                 }
