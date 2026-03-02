@@ -48,10 +48,12 @@ async function verifyHMAC(secret: string, body: string, signature: string): Prom
 		["sign"]
 	);
 	const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
-	const expected = [...new Uint8Array(mac)]
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("");
-	return expected === signature;
+	const expected = new TextEncoder().encode(
+		[...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("")
+	);
+	const received = new TextEncoder().encode(signature);
+	if (expected.byteLength !== received.byteLength) return false;
+	return crypto.subtle.timingSafeEqual(expected, received);
 }
 
 async function hashIP(ip: string): Promise<string> {
@@ -89,10 +91,34 @@ async function handleSubmitScore(
 		return json({ error: "Missing required fields" }, 400);
 	}
 
+	const cleanName = player_name.replace(/<[^>]*>/g, "").trim();
+	if (cleanName.length === 0 || cleanName.length > 20 || cleanName !== player_name.trim()) {
+		return json({ error: "Invalid player name" }, 400);
+	}
+
+	if (score > 1_000_000 || !Number.isInteger(score)) {
+		return json({ error: "Invalid score" }, 400);
+	}
+
+	if (link && !/^https?:\/\/.+/.test(link)) {
+		return json({ error: "Invalid link" }, 400);
+	}
+
 	// Timestamp must be within ±2 minutes
 	const now = Date.now();
 	if (!timestamp || Math.abs(now - timestamp) > 120_000) {
 		return json({ error: "Invalid timestamp" }, 400);
+	}
+
+	// Check username uniqueness
+	const nameTaken = await env.DB.prepare(
+		"SELECT id FROM scores WHERE player_name = ? AND device_id != ? LIMIT 1"
+	)
+		.bind(player_name, device_id)
+		.first();
+
+	if (nameTaken) {
+		return json({ error: "Username already taken" }, 409);
 	}
 
 	// Rate limit: 30s between submissions per device_id
@@ -171,9 +197,29 @@ async function handleUpdateProfile(
 		return json({ error: "Missing required fields" }, 400);
 	}
 
+	const cleanName = player_name.replace(/<[^>]*>/g, "").trim();
+	if (cleanName.length === 0 || cleanName.length > 20 || cleanName !== player_name.trim()) {
+		return json({ error: "Invalid player name" }, 400);
+	}
+
+	if (link && !/^https?:\/\/.+/.test(link)) {
+		return json({ error: "Invalid link" }, 400);
+	}
+
 	const now = Date.now();
 	if (!timestamp || Math.abs(now - timestamp) > 120_000) {
 		return json({ error: "Invalid timestamp" }, 400);
+	}
+
+	// Check username uniqueness
+	const nameTaken = await env.DB.prepare(
+		"SELECT id FROM scores WHERE player_name = ? AND device_id != ? LIMIT 1"
+	)
+		.bind(player_name, device_id)
+		.first();
+
+	if (nameTaken) {
+		return json({ error: "Username already taken" }, 409);
 	}
 
 	await env.DB.prepare(

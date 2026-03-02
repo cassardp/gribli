@@ -1,6 +1,11 @@
 import CryptoKit
 import Foundation
 
+enum APIError: Error {
+    case nameTaken
+    case serverError
+}
+
 enum API {
     static let base = URL(string: "https://gribli-api.cassard.workers.dev")!
     private static let hmacKey = SymmetricKey(data: Data(Secrets.hmacKey.utf8))
@@ -13,10 +18,9 @@ enum API {
             timestamp: Int64(Date().timeIntervalSince1970 * 1000)
         ))
         let (_, response) = try await URLSession.shared.data(for: signed("POST", path: "scores", body: body))
-        guard let http = response as? HTTPURLResponse,
-              200...299 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
-        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.serverError }
+        if http.statusCode == 409 { throw APIError.nameTaken }
+        guard 200...299 ~= http.statusCode else { throw APIError.serverError }
     }
 
     static func updateProfile(playerName: String, link: String?,
@@ -27,22 +31,24 @@ enum API {
             timestamp: Int64(Date().timeIntervalSince1970 * 1000)
         ))
         let (_, response) = try await URLSession.shared.data(for: signed("PUT", path: "profile", body: body))
-        guard let http = response as? HTTPURLResponse,
-              200...299 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
-        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.serverError }
+        if http.statusCode == 409 { throw APIError.nameTaken }
+        guard 200...299 ~= http.statusCode else { throw APIError.serverError }
     }
 
     static func loadScores() async throws -> [ScoreEntry] {
-        let (data, _) = try await URLSession.shared.data(
-            from: base.appendingPathComponent("scores"))
+        let (data, response) = try await URLSession.shared.data(
+            from: base.appending(path: "scores"))
+        guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else {
+            throw APIError.serverError
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([ScoreEntry].self, from: data)
     }
 
     private static func signed(_ method: String, path: String, body: Data) -> URLRequest {
-        var request = URLRequest(url: base.appendingPathComponent(path))
+        var request = URLRequest(url: base.appending(path: path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = body

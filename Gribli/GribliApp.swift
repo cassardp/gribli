@@ -12,7 +12,8 @@ struct GribliApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            GameView()
+                .fontDesign(.rounded)
         }
     }
 }

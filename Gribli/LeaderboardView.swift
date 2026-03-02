@@ -67,22 +67,11 @@ struct LeaderboardView: View {
 
     // MARK: - Helpers
 
-    private var dashedLine: some View {
-        Line()
-            .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-            .foregroundStyle(textColor.opacity(0.12))
-            .frame(height: 1)
-    }
-
     private var plainLine: some View {
         Line()
             .stroke(lineWidth: 1)
             .foregroundStyle(textColor.opacity(0.12))
             .frame(height: 1)
-    }
-
-    private func initialLetter(_ name: String) -> String {
-        String(name.prefix(1)).uppercased()
     }
 
     // MARK: - Scores

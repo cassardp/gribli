@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct GameView: View {
-    var onBack: (() -> Void)?
     @State private var viewModel: GameViewModel
 
     @State private var barFillAnimating = false
@@ -13,8 +12,7 @@ struct GameView: View {
     private var textColor: Color { colorScheme == .dark ? Color(white: 0.85) : Color(white: 0.2) }
     private var isUrgent: Bool { viewModel.timeRemaining <= 10 && viewModel.timeRemaining > 0 && viewModel.hasStarted && !viewModel.isGameOver }
 
-    init(onBack: (() -> Void)? = nil) {
-        self.onBack = onBack
+    init() {
         _viewModel = State(initialValue: GameViewModel())
     }
 

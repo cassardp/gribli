@@ -9,14 +9,9 @@ enum TileType: String, CaseIterable {
     case peach = "🍑"
 }
 
-enum PopupKind {
-    case score
-}
-
 struct ScorePopup: Identifiable {
     let id = UUID()
     let text: String
-    let kind: PopupKind
     var chain: Int = 1
 }
 
@@ -42,7 +37,7 @@ class GameViewModel {
     }
     var isNewBest = false
     var scorePopups: [ScorePopup] = []
-    var timeRemaining: Double = 60
+    var timeRemaining: Double = 30
     var isGameOver = false
     var hasStarted = false
     var isPaused = false
@@ -67,7 +62,7 @@ class GameViewModel {
     private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
 
     private var timerStart: Date?
-    private var timerBudget: Double = 60
+    private var timerBudget: Double = 30
 
     init() {
         self.bestScore = UserDefaults.standard.integer(forKey: "bestScore")
@@ -137,8 +132,8 @@ class GameViewModel {
         isPaused.toggle()
     }
 
-    private func showPopup(_ text: String, kind: PopupKind, chain: Int = 1) {
-        let popup = ScorePopup(text: text, kind: kind, chain: chain)
+    private func showPopup(_ text: String, chain: Int = 1) {
+        let popup = ScorePopup(text: text, chain: chain)
         withAnimation(.spring(duration: 0.3)) {
             scorePopups.append(popup)
         }
@@ -273,7 +268,7 @@ class GameViewModel {
                 isNewBest = true
             }
             addTime(matchCount: rawMatches.count, chain: chain, hasBomb: hasBomb)
-            showPopup("+\(points)", kind: .score, chain: chain)
+            showPopup("+\(points)", chain: chain)
             chain += 1
 
             try? await Task.sleep(for: .milliseconds(150))
