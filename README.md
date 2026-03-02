@@ -8,22 +8,32 @@
 
 A fast-paced timed match-3 puzzle game built entirely in Swift and SwiftUI.
 
-Swap emojis, chain combos, trigger bombs, and race against the clock. You start with 60 seconds — every match buys you more time.
+Swap emojis, chain combos, trigger bombs, and race against the clock. Every match buys you more time.
 
 ## Features
 
 - Timed gameplay with time bonuses on matches and combos
 - Bomb tiles that clear surrounding area and grant extra seconds
 - Cascade chain reactions
-- Online leaderboard with top 3 podium
+- Online leaderboard (best score per player)
 - Pause/resume and restart
 - Haptic feedback
 
 ## Tech
 
-- Swift / SwiftUI
-- Supabase for online leaderboard
-- iOS 17.6+
+- Swift / SwiftUI — iOS 17.6+
+- Cloudflare Workers + D1 for the leaderboard API
+- Zero third-party dependencies on the client (URLSession + CryptoKit)
+
+## Setup
+
+The app requires a `Gribli/Secrets.swift` file (gitignored) for HMAC request signing:
+
+```swift
+enum Secrets {
+    static let hmacKey = "your_hmac_secret_here"
+}
+```
 
 ## License
 
