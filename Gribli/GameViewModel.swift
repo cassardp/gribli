@@ -51,7 +51,11 @@ class GameViewModel {
         didSet { UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled") }
     }
     var playerName: String {
-        didSet { UserDefaults.standard.set(playerName, forKey: "playerName") }
+        didSet {
+            let clean = String(playerName.replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression).prefix(20))
+            if clean != playerName { playerName = clean }
+            UserDefaults.standard.set(playerName, forKey: "playerName")
+        }
     }
     var playerLink: String {
         didSet { UserDefaults.standard.set(playerLink, forKey: "playerLink") }
@@ -68,7 +72,8 @@ class GameViewModel {
     init() {
         self.bestScore = UserDefaults.standard.integer(forKey: "bestScore")
         self.hapticsEnabled = UserDefaults.standard.object(forKey: "hapticsEnabled") as? Bool ?? true
-        self.playerName = UserDefaults.standard.string(forKey: "playerName") ?? ""
+        let rawName = UserDefaults.standard.string(forKey: "playerName") ?? ""
+        self.playerName = String(rawName.replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression).prefix(20))
         self.playerLink = UserDefaults.standard.string(forKey: "playerLink") ?? ""
         setupGrid()
         lightHaptic.prepare()
