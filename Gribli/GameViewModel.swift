@@ -82,12 +82,12 @@ class GameViewModel {
 
     func color(for type: TileType) -> Color {
         switch type {
-        case .apple: Color(red: 0.18, green: 0.76, blue: 0.35)
-        case .cherry: Color(red: 0.92, green: 0.24, blue: 0.28)
-        case .lemon: Color(red: 0.98, green: 0.80, blue: 0.0)
-        case .grape: Color(red: 0.56, green: 0.28, blue: 0.86)
-        case .coconut: Color(red: 0.20, green: 0.56, blue: 0.96)
-        case .peach: Color(red: 0.98, green: 0.52, blue: 0.12)
+        case .apple: Palette.olive
+        case .cherry: Palette.orangeRed
+        case .lemon: Palette.orange
+        case .grape: Palette.blueGray
+        case .coconut: Palette.silver
+        case .peach: Palette.taupe
         }
     }
 

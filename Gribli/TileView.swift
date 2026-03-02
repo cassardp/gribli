@@ -14,13 +14,13 @@ struct TileView: View {
 
     var body: some View {
         Circle()
-            .fill(isBombFlashed ? .white : color)
+            .fill(isBombFlashed ? Palette.cream : color)
             .saturation(isPaused ? 0 : 1)
             .padding(4)
             .overlay {
                 if tile.isBomb && !isBombFlashed {
                     Circle()
-                        .fill(.black)
+                        .fill(Palette.espresso)
                         .frame(width: size * 0.4, height: size * 0.4)
                         .scaleEffect(bombPulse ? 1.2 : 0.85)
                         .opacity(bombPulse ? 1 : 0.7)

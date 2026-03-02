@@ -8,8 +8,8 @@ struct GameView: View {
     @State private var leaderboardProfileMode = 0
 
     @Environment(\.colorScheme) private var colorScheme
-    private var bgColor: Color { colorScheme == .dark ? Color(white: 0.1) : .white }
-    private var textColor: Color { colorScheme == .dark ? Color(white: 0.85) : Color(white: 0.2) }
+    private var bgColor: Color { Palette.background(for: colorScheme) }
+    private var textColor: Color { Palette.text(for: colorScheme) }
     private var isUrgent: Bool { viewModel.timeRemaining <= 10 && viewModel.timeRemaining > 0 && viewModel.hasStarted && !viewModel.isGameOver }
 
     init() {
@@ -19,20 +19,14 @@ struct GameView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Text("\(viewModel.isGameOver ? viewModel.score : viewModel.bestScore)")
-                        .font(.body.bold())
-                        .foregroundStyle(textColor.opacity(0.4))
-                        .contentTransition(.numericText())
-                    if viewModel.isNewBest {
-                        Text("TOP")
-                            .font(.caption2.bold())
-                            .foregroundStyle(bgColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(textColor, in: Capsule())
-                    }
-                }
+                Text("\(viewModel.isGameOver ? viewModel.score : viewModel.bestScore)")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(viewModel.isNewBest ? Palette.cream : textColor.opacity(0.5))
+                    .contentTransition(.numericText())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(viewModel.isNewBest ? Palette.orangeRed : textColor.opacity(0.12), in: Capsule())
+                    .animation(.easeOut(duration: 0.3), value: viewModel.isNewBest)
                 if viewModel.isGameOver {
                     Text("Game Over")
                         .font(.system(size: 44, weight: .heavy))
@@ -127,12 +121,12 @@ struct GameView: View {
             Spacer()
 
             RoundedRectangle(cornerRadius: 3)
-                .fill(isUrgent && !viewModel.isPaused ? .red.opacity(0.15) : textColor.opacity(0.15))
+                .fill(isUrgent && !viewModel.isPaused ? Palette.orangeRed.opacity(0.15) : textColor.opacity(0.15))
                 .frame(height: 6)
                 .overlay(alignment: .leading) {
                     GeometryReader { barGeo in
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(isUrgent && !viewModel.isPaused ? .red : textColor)
+                            .fill(isUrgent && !viewModel.isPaused ? Palette.orangeRed : textColor)
                             .frame(width: barGeo.size.width * (barFillAnimating ? min(viewModel.timeRemaining / 60, 1.0) : 0))
                     }
                 }
@@ -143,12 +137,12 @@ struct GameView: View {
                 .overlay {
                     if isUrgent && !viewModel.isPaused {
                         Text("\(Int(viewModel.timeRemaining))")
-                            .font(.title.monospacedDigit().bold())
+                            .font(.title3.monospacedDigit().bold())
                             .foregroundStyle(bgColor)
                             .contentTransition(.numericText())
                             .animation(.spring(duration: 0.3), value: Int(viewModel.timeRemaining))
-                            .padding(20)
-                            .background(.red, in: Circle())
+                            .padding(16)
+                            .background(Palette.orangeRed, in: Circle())
                             .keyframeAnimator(initialValue: CGFloat(1.0), trigger: Int(viewModel.timeRemaining)) { content, scale in
                                 content.scaleEffect(scale)
                             } keyframes: { _ in
@@ -190,7 +184,7 @@ struct GameView: View {
                     leaderboardProfileMode = 0
                     showLeaderboard = true
                 } label: {
-                    Image(systemName: "trophy")
+                    Image(systemName: "star")
                         .font(.title)
                         .foregroundStyle(textColor)
                 }

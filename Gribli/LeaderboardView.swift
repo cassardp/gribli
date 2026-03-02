@@ -15,8 +15,8 @@ struct LeaderboardView: View {
     @State private var nameTaken = false
     @State private var showScores = false
 
-    private var bgColor: Color { colorScheme == .dark ? Color(white: 0.1) : .white }
-    private var textColor: Color { colorScheme == .dark ? Color(white: 0.85) : Color(white: 0.2) }
+    private var bgColor: Color { Palette.background(for: colorScheme) }
+    private var textColor: Color { Palette.text(for: colorScheme) }
 
     init(playerName: Binding<String>, playerLink: Binding<String>, startTab: Int = 0, onSave: (() async -> Void)? = nil) {
         _playerName = playerName
@@ -25,7 +25,7 @@ struct LeaderboardView: View {
         self.onSave = onSave
     }
 
-    private let tabIcons = [["trophy", "trophy.fill"], ["person", "person.fill"], ["info.circle", "info.circle.fill"]]
+    private let tabIcons = [["star", "star"], ["signature", "signature"], ["info", "info"]]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,15 +65,6 @@ struct LeaderboardView: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private var plainLine: some View {
-        Line()
-            .stroke(lineWidth: 1)
-            .foregroundStyle(textColor.opacity(0.12))
-            .frame(height: 1)
-    }
-
     // MARK: - Scores
 
     private var scoresPage: some View {
@@ -88,44 +79,20 @@ struct LeaderboardView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        Text("Top Scores")
+                        Text("All Stars")
                             .font(.title2.weight(.bold))
                             .foregroundStyle(textColor)
                             .frame(maxWidth: .infinity)
-                            .padding(.bottom, 16)
+                            .padding(.bottom, 20)
                             .offset(y: showScores ? 0 : 12)
                             .opacity(showScores ? 1 : 0)
                             .animation(.easeOut(duration: 0.4).delay(0.05), value: showScores)
-                        if let first = entries.first {
-                            championCard(first)
-                                .padding(.top, 16)
-                                .padding(.bottom, 24)
-                                .offset(y: showScores ? 0 : 16)
-                                .opacity(showScores ? 1 : 0)
-                                .animation(.easeOut(duration: 0.45).delay(0.12), value: showScores)
-                        }
 
-                        if entries.count > 1 {
-                            HStack(spacing: 12) {
-                                plainLine
-                                Text("HALL OF FAME")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .tracking(1.5)
-                                    .foregroundStyle(textColor.opacity(0.3))
-                                plainLine
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 24)
-                            .offset(y: showScores ? 0 : 12)
-                            .opacity(showScores ? 1 : 0)
-                            .animation(.easeOut(duration: 0.4).delay(0.22), value: showScores)
-                        }
-
-                        ForEach(Array(entries.dropFirst().enumerated()), id: \.element.id) { offset, entry in
-                            restRow(rank: offset + 2, entry: entry)
+                        ForEach(Array(entries.enumerated()), id: \.element.id) { offset, entry in
+                            scoreRow(rank: offset + 1, entry: entry)
                                 .offset(y: showScores ? 0 : 12)
                                 .opacity(showScores ? 1 : 0)
-                                .animation(.easeOut(duration: 0.4).delay(0.28 + Double(offset) * 0.05), value: showScores)
+                                .animation(.easeOut(duration: 0.4).delay(0.1 + Double(offset) * 0.05), value: showScores)
                         }
                     }
                 }
@@ -134,48 +101,23 @@ struct LeaderboardView: View {
         }
     }
 
-    private func championCard(_ entry: ScoreEntry) -> some View {
-        linkWrapper(entry) {
-            VStack(spacing: 8) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(textColor)
-
-                HStack(spacing: 4) {
-                    Text(entry.playerName)
-                    if entry.link != nil && !entry.link!.isEmpty {
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption2)
-                    }
-                }
-                .font(.body.weight(.bold))
-                .foregroundStyle(textColor)
-                .lineLimit(1)
-
-                Text("\(entry.score)")
-                    .font(.system(size: 28, weight: .heavy))
-                    .monospacedDigit()
-                    .foregroundStyle(textColor)
-            }
-        }
-    }
-
-    private func restRow(rank: Int, entry: ScoreEntry) -> some View {
-        linkWrapper(entry) {
+    private func scoreRow(rank: Int, entry: ScoreEntry) -> some View {
+        let hasLink = entry.link != nil && !entry.link!.isEmpty
+        return linkWrapper(entry) {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(textColor.opacity(0.08))
-                    .frame(width: 28, height: 28)
+                    .fill(hasLink ? Palette.olive : textColor.opacity(0.12))
+                    .frame(width: 36, height: 36)
                     .overlay(
                         Text("\(rank)")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 16, weight: .bold))
                             .monospacedDigit()
-                            .foregroundStyle(textColor.opacity(0.5))
+                            .foregroundStyle(hasLink ? Palette.cream : textColor.opacity(0.5))
                     )
 
                 HStack(spacing: 4) {
                     Text(entry.playerName)
-                    if entry.link != nil && !entry.link!.isEmpty {
+                    if hasLink {
                         Image(systemName: "arrow.up.right")
                             .font(.caption2)
                     }
@@ -190,9 +132,12 @@ struct LeaderboardView: View {
                     .font(.body.monospacedDigit().weight(.medium))
                     .foregroundStyle(textColor.opacity(0.5))
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(textColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.vertical, 5)
     }
 
     @ViewBuilder
@@ -218,7 +163,7 @@ struct LeaderboardView: View {
                     .foregroundStyle(textColor)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 20)
 
                 Text("Displayed on Top Scores.")
                     .font(.body)
@@ -283,14 +228,17 @@ struct LeaderboardView: View {
     enum FieldStatus { case error }
 
     private func profileField(icon: String, text: Binding<String>, placeholder: String, keyboard: UIKeyboardType = .default, capitalization: TextInputAutocapitalization = .never, status: FieldStatus? = nil) -> some View {
-        HStack(spacing: 12) {
+        let filled = !text.wrappedValue.isEmpty
+        let circleColor: Color = status == .error ? Palette.orangeRed : (filled ? Palette.olive : textColor.opacity(0.12))
+        let iconColor: Color = status == .error ? Palette.cream : (filled ? Palette.cream : textColor.opacity(0.5))
+        return HStack(spacing: 12) {
             Circle()
-                .fill(status == .error ? .red.opacity(0.8) : textColor)
+                .fill(circleColor)
                 .frame(width: 36, height: 36)
                 .overlay(
                     Image(systemName: status == .error ? "xmark" : icon)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(status == .error ? .white : bgColor)
+                        .foregroundStyle(iconColor)
                 )
 
             TextField(placeholder, text: text)
@@ -302,8 +250,9 @@ struct LeaderboardView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background((status == .error ? Color.red.opacity(0.08) : textColor.opacity(0.06)), in: RoundedRectangle(cornerRadius: 12))
+        .background((status == .error ? Palette.orangeRed.opacity(0.08) : textColor.opacity(0.06)), in: RoundedRectangle(cornerRadius: 12))
         .animation(.easeInOut(duration: 0.2), value: status == .error)
+        .animation(.easeOut(duration: 0.2), value: filled)
     }
 
     // MARK: - Info
@@ -316,13 +265,14 @@ struct LeaderboardView: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(textColor)
                         .frame(maxWidth: .infinity)
+                        .padding(.bottom, -8)
 
                     Text("Gribli is a free, open-source match-3 puzzle game. No ads, no tracking, no in-app purchases — just swap, match, and chase the high score.")
                         .font(.body)
                         .foregroundStyle(textColor.opacity(0.8))
-                        .multilineTextAlignment(.center)
+                        .multilineTextAlignment(.leading)
                         .lineSpacing(4)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Spacer()
 
@@ -380,14 +330,5 @@ struct LeaderboardView: View {
 
     private func loadEntries() async {
         entries = (try? await API.loadScores()) ?? []
-    }
-}
-
-private struct Line: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { p in
-            p.move(to: CGPoint(x: 0, y: rect.midY))
-            p.addLine(to: CGPoint(x: rect.width, y: rect.midY))
-        }
     }
 }
