@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "mcp__plugin_supabase_supabase__list_projects",
+      "mcp__plugin_supabase_supabase__list_tables",
+      "mcp__plugin_supabase_supabase__apply_migration",
+      "mcp__plugin_supabase_supabase__get_project_url",
+      "mcp__plugin_supabase_supabase__get_publishable_keys",
+      "mcp__plugin_supabase_supabase__get_advisors",
+      "mcp__plugin_supabase_supabase__execute_sql",
+      "mcp__plugin_supabase_supabase__search_docs",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "WebFetch(domain:www.freecodecamp.org)",
+      "WebFetch(domain:www.asushil.com.np)",
+      "WebFetch(domain:rajeshbudhiraja5.medium.com)",
+      "WebFetch(domain:onemorething.technology)",
+      "WebFetch(domain:www.bomberbot.com)",
+      "WebFetch(domain:blog.bitbebop.com)",
+      "WebFetch(domain:vittorioromeo.info)",
+      "WebFetch(domain:3e8.io)",
+      "WebFetch(domain:vittorioromeo.com)",
+      "WebFetch(domain:adjoe.io)",
+      "mcp__plugin_supabase_supabase__deploy_edge_function",
+      "mcp__plugin_supabase_supabase__get_logs",
+      "Bash(openssl rand:*)",
+      "mcp__plugin_supabase_supabase__get_edge_function"
+    ]
+  }
+}

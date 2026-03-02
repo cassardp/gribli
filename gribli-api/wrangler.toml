@@ -1,0 +1,8 @@
+name = "gribli-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gribli"
+database_id = "d767394b-5f20-4a34-951d-777921923735"
