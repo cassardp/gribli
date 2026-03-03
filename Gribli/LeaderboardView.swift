@@ -299,12 +299,12 @@ struct LeaderboardView: View {
                     VStack(spacing: 10) {
                         infoLink(
                             icon: "at",
-                            label: "Follow me on X",
+                            label: "Follow me on Twitter",
                             url: "https://x.com/patricecassard"
                         )
                         infoLink(
                             icon: "pin.fill",
-                            label: "Try also Pinpin",
+                            label: "Try Pinpin (my other app)",
                             url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154"
                         )
                         infoLink(
