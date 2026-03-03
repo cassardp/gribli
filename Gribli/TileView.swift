@@ -9,7 +9,6 @@ struct TileView: View {
     let isGameOver: Bool
     let size: CGFloat
 
-    @State private var bombPulse = false
     @State private var shakeTrigger = false
 
     var body: some View {
@@ -22,8 +21,6 @@ struct TileView: View {
                     Circle()
                         .fill(Palette.espresso)
                         .frame(width: size * 0.4, height: size * 0.4)
-                        .scaleEffect(bombPulse ? 1.2 : 0.85)
-                        .opacity(bombPulse ? 1 : 0.7)
                 }
             }
             .frame(width: size, height: size)
@@ -47,13 +44,6 @@ struct TileView: View {
                 CubicKeyframe(0, duration: 0.3)
             }
             .opacity(tile.isMatched ? 0 : 1)
-            .onAppear {
-                if tile.isBomb {
-                    withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                        bombPulse = true
-                    }
-                }
-            }
             .onChange(of: isGameOver) {
                 if isGameOver {
                     Task {

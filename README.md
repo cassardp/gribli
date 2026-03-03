@@ -1,7 +1,9 @@
 <p align="center">
-  <img src="screenshots/IMG_3858.PNG" width="280" alt="Gameplay screenshot" />
-  &nbsp;&nbsp;&nbsp;
-  <img src="screenshots/IMG_3859.PNG" width="280" alt="Gameplay screenshot" />
+  <img src="screenshots/1.png" width="220" alt="Gameplay screenshot" />
+  &nbsp;&nbsp;
+  <img src="screenshots/2.png" width="220" alt="Gameplay screenshot" />
+  &nbsp;&nbsp;
+  <img src="screenshots/3.png" width="220" alt="Gameplay screenshot" />
 </p>
 
 # Gribli
