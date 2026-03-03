@@ -6,6 +6,7 @@ struct GameView: View {
     @State private var barFillAnimating = false
     @State private var showLeaderboard = false
     @State private var leaderboardProfileMode = 0
+    @State private var leaderboardId = UUID()
 
     @Environment(\.colorScheme) private var colorScheme
     private var bgColor: Color { Palette.background(for: colorScheme) }
@@ -102,6 +103,7 @@ struct GameView: View {
                 .animation(.easeInOut(duration: 0.3), value: viewModel.showNoMoves)
                 .onChange(of: viewModel.isGameOver) {
                     if viewModel.isGameOver {
+                        leaderboardId = UUID()
                         if viewModel.playerName.isEmpty {
                             leaderboardProfileMode = 1
                             showLeaderboard = true
@@ -181,6 +183,7 @@ struct GameView: View {
                 .padding(.bottom, 32)
             } else {
                 Button {
+                    leaderboardId = UUID()
                     leaderboardProfileMode = 0
                     showLeaderboard = true
                 } label: {
@@ -209,12 +212,14 @@ struct GameView: View {
                     set: { viewModel.playerLink = $0 }
                 ),
                 startTab: leaderboardProfileMode,
+                highlightPlayerName: viewModel.isGameOver && viewModel.isNewBest && !viewModel.playerName.isEmpty ? viewModel.playerName : nil,
                 onSave: {
                     if viewModel.isGameOver && !viewModel.scoreSubmitted {
                         await viewModel.submitScore()
                     }
                 }
             )
+            .id(leaderboardId)
         }
     }
 }

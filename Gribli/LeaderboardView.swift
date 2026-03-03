@@ -3,6 +3,7 @@ import SwiftUI
 struct LeaderboardView: View {
     @Binding var playerName: String
     @Binding var playerLink: String
+    var highlightPlayerName: String?
     var onSave: (() async -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -18,10 +19,11 @@ struct LeaderboardView: View {
     private var bgColor: Color { Palette.background(for: colorScheme) }
     private var textColor: Color { Palette.text(for: colorScheme) }
 
-    init(playerName: Binding<String>, playerLink: Binding<String>, startTab: Int = 0, onSave: (() async -> Void)? = nil) {
+    init(playerName: Binding<String>, playerLink: Binding<String>, startTab: Int = 0, highlightPlayerName: String? = nil, onSave: (() async -> Void)? = nil) {
         _playerName = playerName
         _playerLink = playerLink
         _selectedTab = State(initialValue: startTab)
+        self.highlightPlayerName = highlightPlayerName
         self.onSave = onSave
     }
 
@@ -42,12 +44,12 @@ struct LeaderboardView: View {
                 }
             }
             .padding(.top, 28)
-            .padding(.bottom, 24)
+            .padding(.bottom, 26)
 
             TabView(selection: $selectedTab) {
-                scoresPage.padding(.top, 12).tag(0)
-                profilePage.padding(.top, 12).tag(1)
-                infoPage.padding(.top, 12).tag(2)
+                scoresPage.tag(0)
+                profilePage.tag(1)
+                infoPage.tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea(edges: .bottom)
@@ -77,42 +79,58 @@ struct LeaderboardView: View {
                     .foregroundStyle(textColor.opacity(0.4))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        Text("All Stars")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(textColor)
-                            .frame(maxWidth: .infinity)
-                            .padding(.bottom, 20)
-                            .offset(y: showScores ? 0 : 12)
-                            .opacity(showScores ? 1 : 0)
-                            .animation(.easeOut(duration: 0.4).delay(0.05), value: showScores)
-
-                        ForEach(Array(entries.enumerated()), id: \.element.id) { offset, entry in
-                            scoreRow(rank: offset + 1, entry: entry)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            Text("All Stars")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(textColor)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 12)
+                                .padding(.bottom, 20)
                                 .offset(y: showScores ? 0 : 12)
                                 .opacity(showScores ? 1 : 0)
-                                .animation(.easeOut(duration: 0.4).delay(0.1 + Double(offset) * 0.05), value: showScores)
+                                .animation(.easeOut(duration: 0.4).delay(0.05), value: showScores)
+
+                            ForEach(Array(entries.enumerated()), id: \.element.id) { offset, entry in
+                                let isHighlighted = highlightPlayerName != nil && entry.playerName == highlightPlayerName
+                                scoreRow(rank: offset + 1, entry: entry, isHighlighted: isHighlighted)
+                                    .id(entry.id)
+                                    .offset(y: showScores ? 0 : 12)
+                                    .opacity(showScores ? 1 : 0)
+                                    .animation(.easeOut(duration: 0.4).delay(0.1 + Double(offset) * 0.05), value: showScores)
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                    .onChange(of: showScores) {
+                        if showScores, let name = highlightPlayerName,
+                           let match = entries.first(where: { $0.playerName == name }) {
+                            let delay = 0.1 + Double(entries.firstIndex(where: { $0.id == match.id })!) * 0.05 + 0.3
+                            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                                withAnimation(.easeOut(duration: 0.4)) {
+                                    proxy.scrollTo(match.id, anchor: .center)
+                                }
+                            }
                         }
                     }
                 }
-                .scrollIndicators(.hidden)
             }
         }
     }
 
-    private func scoreRow(rank: Int, entry: ScoreEntry) -> some View {
+    private func scoreRow(rank: Int, entry: ScoreEntry, isHighlighted: Bool = false) -> some View {
         let hasLink = entry.link != nil && !entry.link!.isEmpty
         return linkWrapper(entry) {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(hasLink ? Palette.olive : textColor.opacity(0.12))
+                    .fill(isHighlighted ? Palette.orangeRed : (hasLink ? Palette.olive : textColor.opacity(0.12)))
                     .frame(width: 36, height: 36)
                     .overlay(
                         Text("\(rank)")
                             .font(.system(size: 16, weight: .bold))
                             .monospacedDigit()
-                            .foregroundStyle(hasLink ? Palette.cream : textColor.opacity(0.5))
+                            .foregroundStyle(isHighlighted ? Palette.cream : (hasLink ? Palette.cream : textColor.opacity(0.5)))
                     )
 
                 HStack(spacing: 4) {
@@ -130,11 +148,11 @@ struct LeaderboardView: View {
 
                 Text("\(entry.score)")
                     .font(.body.monospacedDigit().weight(.medium))
-                    .foregroundStyle(textColor.opacity(0.5))
+                    .foregroundStyle(isHighlighted ? textColor : textColor.opacity(0.5))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(textColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            .background((isHighlighted ? Palette.orangeRed.opacity(0.12) : textColor.opacity(0.06)), in: RoundedRectangle(cornerRadius: 12))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 5)
@@ -163,9 +181,10 @@ struct LeaderboardView: View {
                     .foregroundStyle(textColor)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
+                    .padding(.top, 12)
                     .padding(.bottom, 20)
 
-                Text("Displayed on Top Scores.")
+                Text("Displayed on All Stars.")
                     .font(.body)
                     .foregroundStyle(textColor.opacity(0.8))
                     .multilineTextAlignment(.center)
@@ -265,14 +284,15 @@ struct LeaderboardView: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(textColor)
                         .frame(maxWidth: .infinity)
+                        .padding(.top, 12)
                         .padding(.bottom, -8)
 
-                    Text("Gribli is a free, open-source match-3 puzzle game. No ads, no tracking, no in-app purchases — just swap, match, and chase the high score.")
+                    Text("Gribli is a minimalist match-3 puzzle game (free, open-source, no ads, no tracking, no in-app purchases, forever). Swap, match, and chase the high score. Add a link to your profile to showcase your project on the leaderboard.")
                         .font(.body)
                         .foregroundStyle(textColor.opacity(0.8))
-                        .multilineTextAlignment(.leading)
+                        .multilineTextAlignment(.center)
                         .lineSpacing(4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity)
 
                     Spacer()
 
@@ -286,6 +306,11 @@ struct LeaderboardView: View {
                             icon: "pin.fill",
                             label: "Try also Pinpin",
                             url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154"
+                        )
+                        infoLink(
+                            icon: "cup.and.saucer.fill",
+                            label: "Buy me a coffee",
+                            url: "https://buymeacoffee.com/patricecassard"
                         )
                     }
 
