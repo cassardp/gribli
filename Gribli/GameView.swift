@@ -74,28 +74,23 @@ struct GameView: View {
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
+                                    guard dragTileId == nil, !viewModel.isGameOver else { return }
                                     let dx = value.translation.width
                                     let dy = value.translation.height
                                     guard max(abs(dx), abs(dy)) >= 6 else { return }
-                                    let limit = tileSize * 0.35
-                                    func rubber(_ x: CGFloat) -> CGFloat {
-                                        let sign: CGFloat = x < 0 ? -1 : 1
-                                        let abs = abs(x)
-                                        return sign * limit * (1 - exp(-abs / limit))
-                                    }
-                                    if abs(dx) > abs(dy) {
+                                    let nudge = tileSize * 0.25
+                                    withAnimation(.spring(duration: 0.15)) {
                                         dragTileId = tile.id
-                                        dragOffset = CGSize(width: rubber(dx), height: 0)
-                                    } else {
-                                        dragTileId = tile.id
-                                        dragOffset = CGSize(width: 0, height: rubber(dy))
+                                        if abs(dx) > abs(dy) {
+                                            dragOffset = CGSize(width: dx > 0 ? nudge : -nudge, height: 0)
+                                        } else {
+                                            dragOffset = CGSize(width: 0, height: dy > 0 ? nudge : -nudge)
+                                        }
                                     }
                                 }
                                 .onEnded { value in
-                                    withAnimation(.spring(duration: 0.15)) {
-                                        dragTileId = nil
-                                        dragOffset = .zero
-                                    }
+                                    dragTileId = nil
+                                    dragOffset = .zero
                                     let dx = value.translation.width
                                     let dy = value.translation.height
                                     if max(abs(dx), abs(dy)) < 6 {
