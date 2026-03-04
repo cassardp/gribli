@@ -8,6 +8,8 @@ struct GameView: View {
     @State private var leaderboardProfileMode = 0
     @State private var leaderboardId = UUID()
     @State private var showPauseHint = false
+    @State private var dragTileId: UUID?
+    @State private var dragOffset: CGSize = .zero
 
     @Environment(\.colorScheme) private var colorScheme
     private var bgColor: Color { Palette.background(for: colorScheme) }
@@ -64,13 +66,36 @@ struct GameView: View {
                             size: tileSize
                         )
                         .offset(
-                            x: CGFloat(tile.col) * tileSize,
-                            y: CGFloat(tile.row) * tileSize
+                            x: CGFloat(tile.col) * tileSize + (dragTileId == tile.id ? dragOffset.width : 0),
+                            y: CGFloat(tile.row) * tileSize + (dragTileId == tile.id ? dragOffset.height : 0)
                         )
+                        .zIndex(dragTileId == tile.id ? 1 : 0)
                         .transition(.identity)
                         .gesture(
                             DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let dx = value.translation.width
+                                    let dy = value.translation.height
+                                    guard max(abs(dx), abs(dy)) >= 6 else { return }
+                                    let limit = tileSize * 0.35
+                                    func rubber(_ x: CGFloat) -> CGFloat {
+                                        let sign: CGFloat = x < 0 ? -1 : 1
+                                        let abs = abs(x)
+                                        return sign * limit * (1 - exp(-abs / limit))
+                                    }
+                                    if abs(dx) > abs(dy) {
+                                        dragTileId = tile.id
+                                        dragOffset = CGSize(width: rubber(dx), height: 0)
+                                    } else {
+                                        dragTileId = tile.id
+                                        dragOffset = CGSize(width: 0, height: rubber(dy))
+                                    }
+                                }
                                 .onEnded { value in
+                                    withAnimation(.spring(duration: 0.15)) {
+                                        dragTileId = nil
+                                        dragOffset = .zero
+                                    }
                                     let dx = value.translation.width
                                     let dy = value.translation.height
                                     if max(abs(dx), abs(dy)) < 6 {
