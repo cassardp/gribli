@@ -8,9 +8,6 @@ struct GameView: View {
     @State private var leaderboardProfileMode = 0
     @State private var leaderboardId = UUID()
     @State private var showPauseHint = false
-    @State private var dragTileId: UUID?
-    @State private var dragOffset: CGSize = .zero
-
     @Environment(\.colorScheme) private var colorScheme
     private var bgColor: Color { Palette.background(for: colorScheme) }
     private var textColor: Color { Palette.text(for: colorScheme) }
@@ -66,31 +63,13 @@ struct GameView: View {
                             size: tileSize
                         )
                         .offset(
-                            x: CGFloat(tile.col) * tileSize + (dragTileId == tile.id ? dragOffset.width : 0),
-                            y: CGFloat(tile.row) * tileSize + (dragTileId == tile.id ? dragOffset.height : 0)
+                            x: CGFloat(tile.col) * tileSize,
+                            y: CGFloat(tile.row) * tileSize
                         )
-                        .zIndex(dragTileId == tile.id ? 1 : 0)
                         .transition(.identity)
                         .gesture(
                             DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    guard dragTileId == nil, !viewModel.isGameOver else { return }
-                                    let dx = value.translation.width
-                                    let dy = value.translation.height
-                                    guard max(abs(dx), abs(dy)) >= 6 else { return }
-                                    let nudge = tileSize * 0.25
-                                    withAnimation(.spring(duration: 0.15)) {
-                                        dragTileId = tile.id
-                                        if abs(dx) > abs(dy) {
-                                            dragOffset = CGSize(width: dx > 0 ? nudge : -nudge, height: 0)
-                                        } else {
-                                            dragOffset = CGSize(width: 0, height: dy > 0 ? nudge : -nudge)
-                                        }
-                                    }
-                                }
                                 .onEnded { value in
-                                    dragTileId = nil
-                                    dragOffset = .zero
                                     let dx = value.translation.width
                                     let dy = value.translation.height
                                     if max(abs(dx), abs(dy)) < 6 {
