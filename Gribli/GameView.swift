@@ -7,6 +7,7 @@ struct GameView: View {
     @State private var showLeaderboard = false
     @State private var leaderboardProfileMode = 0
     @State private var leaderboardId = UUID()
+    @State private var showPauseHint = false
 
     @Environment(\.colorScheme) private var colorScheme
     private var bgColor: Color { Palette.background(for: colorScheme) }
@@ -20,7 +21,7 @@ struct GameView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
-                Text("\(viewModel.isGameOver ? viewModel.score : viewModel.bestScore)")
+                Text(verbatim: "\(viewModel.isGameOver ? viewModel.score : viewModel.bestScore)")
                     .font(.subheadline.bold())
                     .foregroundStyle(viewModel.isNewBest ? Palette.cream : textColor.opacity(0.5))
                     .contentTransition(.numericText())
@@ -155,6 +156,23 @@ struct GameView: View {
                     }
                 }
                 .animation(.easeOut(duration: 0.3), value: isUrgent)
+                .overlay(alignment: .top) {
+                    if viewModel.isPaused {
+                        Text("paused")
+                            .font(.caption.smallCaps())
+                            .foregroundStyle(textColor.opacity(0.5))
+                            .offset(y: -28)
+                            .transition(.opacity)
+                    } else if showPauseHint {
+                        Text("tap to pause")
+                            .font(.caption.smallCaps())
+                            .foregroundStyle(textColor.opacity(0.5))
+                            .offset(y: -28)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.5), value: viewModel.isPaused)
+                .animation(.easeOut(duration: 0.5), value: showPauseHint)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
             .onTapGesture {
@@ -167,18 +185,37 @@ struct GameView: View {
                     withAnimation(.easeOut(duration: 0.4)) {
                         barFillAnimating = true
                     }
+                    showPauseHint = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        showPauseHint = false
+                    }
                 } else {
                     barFillAnimating = false
+                    showPauseHint = false
                 }
             }
 
             Spacer()
 
-            if viewModel.hasStarted {
+            if viewModel.hasStarted && !viewModel.isPaused {
                 Button { withAnimation { viewModel.setupGrid() } } label: {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.title2)
+                        .font(.title)
                         .foregroundStyle(textColor)
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.bottom, 32)
+            } else if viewModel.isPaused {
+                Button {
+                    leaderboardId = UUID()
+                    leaderboardProfileMode = 0
+                    showLeaderboard = true
+                } label: {
+                    Image(systemName: "star")
+                        .font(.title)
+                        .foregroundStyle(textColor)
+                        .frame(width: 44, height: 44)
                 }
                 .padding(.bottom, 32)
             } else {
@@ -190,6 +227,7 @@ struct GameView: View {
                     Image(systemName: "star")
                         .font(.title)
                         .foregroundStyle(textColor)
+                        .frame(width: 44, height: 44)
                 }
                 .padding(.bottom, 32)
             }

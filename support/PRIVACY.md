@@ -17,15 +17,16 @@ Your game progress and settings are stored locally on your device.
 If you choose to submit your score to the leaderboard, the following data is stored on our servers:
 - Your chosen display name
 - Your score
+- A random device identifier (used to associate your scores and enforce fair play)
 
-This data is stored using Supabase, a secure cloud platform. No other personal information is collected or linked to your leaderboard entry.
+This data is stored using Cloudflare, a secure cloud platform. No other personal information is collected or linked to your leaderboard entry.
 
 ## Data We Do NOT Collect
 
 - Personal information (email, phone, etc.)
 - Usage analytics
 - Location data
-- Device identifiers
+- Advertising identifiers
 - Browsing history
 - Any form of tracking
 

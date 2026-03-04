@@ -15,6 +15,7 @@ struct TileView: View {
         Circle()
             .fill(isBombFlashed ? Palette.cream : color)
             .saturation(isPaused ? 0 : 1)
+            .colorMultiply(isPaused ? Palette.sand : .white)
             .padding(4)
             .overlay {
                 if tile.isBomb && !isBombFlashed {

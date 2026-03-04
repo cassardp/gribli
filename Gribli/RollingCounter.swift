@@ -6,7 +6,7 @@ struct RollingCounter: View {
     let color: Color
 
     var body: some View {
-        Text("\(value)")
+        Text(verbatim: "\(value)")
             .font(font)
             .foregroundStyle(color)
             .contentTransition(.numericText(countsDown: false))

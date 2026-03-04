@@ -1,5 +1,16 @@
 import SwiftUI
 
+private extension View {
+    @ViewBuilder
+    func optionallyFocused<V: Hashable>(_ binding: FocusState<V>.Binding?, equals value: V) -> some View {
+        if let binding {
+            self.focused(binding, equals: value)
+        } else {
+            self
+        }
+    }
+}
+
 struct LeaderboardView: View {
     @Binding var playerName: String
     @Binding var playerLink: String
@@ -15,9 +26,12 @@ struct LeaderboardView: View {
     @State private var savedLink = ""
     @State private var nameTaken = false
     @State private var showScores = false
+    private enum Field { case name, link }
+    @FocusState private var focusedField: Field?
 
     private var bgColor: Color { Palette.background(for: colorScheme) }
     private var textColor: Color { Palette.text(for: colorScheme) }
+    private var bestScore: Int { UserDefaults.standard.integer(forKey: "bestScore") }
 
     init(playerName: Binding<String>, playerLink: Binding<String>, startTab: Int = 0, highlightPlayerName: String? = nil, onSave: (() async -> Void)? = nil) {
         _playerName = playerName
@@ -53,6 +67,7 @@ struct LeaderboardView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea(edges: .bottom)
+            .onChange(of: selectedTab) { focusedField = nil }
         }
         .background(bgColor.ignoresSafeArea())
         .fontDesign(.rounded)
@@ -146,7 +161,7 @@ struct LeaderboardView: View {
 
                 Spacer()
 
-                Text("\(entry.score)")
+                Text(verbatim: "\(entry.score)")
                     .font(.body.monospacedDigit().weight(.medium))
                     .foregroundStyle(isHighlighted ? textColor : textColor.opacity(0.5))
             }
@@ -193,9 +208,19 @@ struct LeaderboardView: View {
                     .padding(.bottom, 24)
 
                 VStack(spacing: 10) {
-                    profileField(icon: "person.fill", text: $playerName, placeholder: "Username", capitalization: .words, status: nameTaken ? .error : nil)
+                    profileField(icon: "person.fill", text: $playerName, placeholder: "Username", capitalization: .words, status: nameTaken ? .error : nil, highlighted: !playerLink.isEmpty, focusBinding: $focusedField, focusValue: .name)
                         .onChange(of: playerName) { nameTaken = false }
-                    profileField(icon: "link", text: $playerLink, placeholder: "Link (optional)", keyboard: .URL)
+                        .overlay(alignment: .trailing) {
+                            if focusedField != .name && bestScore > 0 {
+                                Text(verbatim: "\(bestScore)")
+                                    .font(.body.monospacedDigit().weight(.medium))
+                                    .foregroundStyle(textColor.opacity(0.5))
+                                    .padding(.trailing, 14)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .animation(.easeOut(duration: 0.2), value: focusedField)
+                    profileField(icon: "link", text: $playerLink, placeholder: "Link (optional)", keyboard: .URL, highlighted: false, focusBinding: $focusedField, focusValue: .link)
                 }
                 .padding(.horizontal, 20)
 
@@ -246,8 +271,8 @@ struct LeaderboardView: View {
 
     enum FieldStatus { case error }
 
-    private func profileField(icon: String, text: Binding<String>, placeholder: String, keyboard: UIKeyboardType = .default, capitalization: TextInputAutocapitalization = .never, status: FieldStatus? = nil) -> some View {
-        let filled = !text.wrappedValue.isEmpty
+    private func profileField(icon: String, text: Binding<String>, placeholder: String, keyboard: UIKeyboardType = .default, capitalization: TextInputAutocapitalization = .never, status: FieldStatus? = nil, highlighted: Bool? = nil, focusBinding: FocusState<Field?>.Binding? = nil, focusValue: Field? = nil) -> some View {
+        let filled = highlighted ?? !text.wrappedValue.isEmpty
         let circleColor: Color = status == .error ? Palette.orangeRed : (filled ? Palette.olive : textColor.opacity(0.12))
         let iconColor: Color = status == .error ? Palette.cream : (filled ? Palette.cream : textColor.opacity(0.5))
         return HStack(spacing: 12) {
@@ -266,6 +291,7 @@ struct LeaderboardView: View {
                 .keyboardType(keyboard)
                 .font(.body.weight(.medium))
                 .foregroundStyle(textColor)
+                .optionallyFocused(focusBinding, equals: focusValue ?? .name)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

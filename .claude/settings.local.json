@@ -25,7 +25,9 @@
       "mcp__plugin_supabase_supabase__deploy_edge_function",
       "mcp__plugin_supabase_supabase__get_logs",
       "Bash(openssl rand:*)",
-      "mcp__plugin_supabase_supabase__get_edge_function"
+      "mcp__plugin_supabase_supabase__get_edge_function",
+      "Bash(npx wrangler:*)",
+      "WebFetch(domain:buymeacoffee.com)"
     ]
   }
 }

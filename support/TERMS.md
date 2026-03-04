@@ -23,7 +23,7 @@ You agree not to use Gribli to:
 ## Third-Party Services
 
 Gribli uses:
-- **Supabase** for leaderboard data (governed by Supabase's terms)
+- **Cloudflare** for leaderboard data (governed by Cloudflare's terms)
 
 Use of the leaderboard feature is subject to their respective terms of service.
 
