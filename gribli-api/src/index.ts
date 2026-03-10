@@ -68,7 +68,7 @@ async function hashIP(ip: string): Promise<string> {
 // GET /scores — Top 50 leaderboard
 async function handleGetScores(env: Env): Promise<Response> {
 	const { results } = await env.DB.prepare(
-		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = 'gribli' ORDER BY score DESC LIMIT 50"
+		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = 'gribli' ORDER BY score DESC LIMIT 99"
 	).all();
 	return json(results);
 }
