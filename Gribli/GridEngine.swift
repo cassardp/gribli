@@ -33,6 +33,11 @@ struct GridEngine {
         if row >= 2, grid[row - 1][col].type == grid[row - 2][col].type {
             forbidden.insert(grid[row - 1][col].type)
         }
+        if row >= 1, col >= 1,
+           currentRow[col - 1].type == grid[row - 1][col - 1].type,
+           currentRow[col - 1].type == grid[row - 1][col].type {
+            forbidden.insert(currentRow[col - 1].type)
+        }
         return all.filter { !forbidden.contains($0) }.randomElement()!
     }
 
@@ -74,6 +79,19 @@ struct GridEngine {
                     for r in row..<end { matched.insert(grid[r][col].id) }
                 }
                 row = end
+            }
+        }
+        for row in 0..<rows - 1 {
+            for col in 0..<cols - 1 {
+                let type = grid[row][col].type
+                if grid[row][col + 1].type == type,
+                   grid[row + 1][col].type == type,
+                   grid[row + 1][col + 1].type == type {
+                    matched.insert(grid[row][col].id)
+                    matched.insert(grid[row][col + 1].id)
+                    matched.insert(grid[row + 1][col].id)
+                    matched.insert(grid[row + 1][col + 1].id)
+                }
             }
         }
         return matched
@@ -187,6 +205,14 @@ struct GridEngine {
                     while end < rows, t[end][col] == tp { end += 1 }
                     if end - row >= 3 { return true }
                     row = end
+                }
+            }
+            for row in 0..<rows - 1 {
+                for col in 0..<cols - 1 {
+                    let tp = t[row][col]
+                    if t[row][col + 1] == tp, t[row + 1][col] == tp, t[row + 1][col + 1] == tp {
+                        return true
+                    }
                 }
             }
             return false

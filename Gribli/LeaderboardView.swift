@@ -333,11 +333,6 @@ struct LeaderboardView: View {
                             label: "Try Pinpin (my other app)",
                             url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154"
                         )
-                        infoLink(
-                            icon: "cup.and.saucer.fill",
-                            label: "Buy me a coffee",
-                            url: "https://buymeacoffee.com/patricecassard"
-                        )
                     }
 
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")")

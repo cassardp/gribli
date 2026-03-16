@@ -8,7 +8,8 @@ export default {
 		const url = new URL(request.url);
 
 		if (request.method === "GET" && url.pathname === "/scores") {
-			return handleGetScores(env);
+			const game = url.searchParams.get("game") || "gribli";
+			return handleGetScores(env, game);
 		}
 
 		// POST and PUT require valid HMAC signature
@@ -66,10 +67,10 @@ async function hashIP(ip: string): Promise<string> {
 }
 
 // GET /scores — Top 50 leaderboard
-async function handleGetScores(env: Env): Promise<Response> {
+async function handleGetScores(env: Env, game: string): Promise<Response> {
 	const { results } = await env.DB.prepare(
-		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = 'gribli' ORDER BY score DESC LIMIT 99"
-	).all();
+		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? ORDER BY score DESC LIMIT 99"
+	).bind(game).all();
 	return json(results);
 }
 
@@ -79,13 +80,16 @@ async function handleSubmitScore(
 	request: Request,
 	env: Env
 ): Promise<Response> {
-	const { player_name, score, link, device_id, timestamp } = body as {
+	const { player_name, score, link, device_id, timestamp, game: rawGame } = body as {
 		player_name?: string;
 		score?: number;
 		link?: string;
 		device_id?: string;
 		timestamp?: number;
+		game?: string;
 	};
+
+	const game = rawGame || "gribli";
 
 	if (!player_name || typeof score !== "number" || !device_id) {
 		return json({ error: "Missing required fields" }, 400);
@@ -100,7 +104,8 @@ async function handleSubmitScore(
 		return json({ error: "Invalid score" }, 400);
 	}
 
-	if (link && !/^https?:\/\/.+/.test(link)) {
+	const normalizedLink = link && !/^https?:\/\//i.test(link) ? `https://${link}` : link;
+	if (normalizedLink && !/^https?:\/\/.+/.test(normalizedLink)) {
 		return json({ error: "Invalid link" }, 400);
 	}
 
@@ -110,11 +115,11 @@ async function handleSubmitScore(
 		return json({ error: "Invalid timestamp" }, 400);
 	}
 
-	// Check username uniqueness
+	// Check username uniqueness within game
 	const nameTaken = await env.DB.prepare(
-		"SELECT id FROM scores WHERE player_name = ? AND device_id != ? LIMIT 1"
+		"SELECT id FROM scores WHERE player_name = ? AND device_id != ? AND game = ? LIMIT 1"
 	)
-		.bind(player_name, device_id)
+		.bind(player_name, device_id, game)
 		.first();
 
 	if (nameTaken) {
@@ -152,11 +157,11 @@ async function handleSubmitScore(
 		}
 	}
 
-	// Only keep best score per device
+	// Only keep best score per device per game
 	const existing = await env.DB.prepare(
-		"SELECT id, score FROM scores WHERE device_id = ? AND game = 'gribli'"
+		"SELECT id, score FROM scores WHERE device_id = ? AND game = ?"
 	)
-		.bind(device_id)
+		.bind(device_id, game)
 		.first<{ id: number; score: number }>();
 
 	if (existing) {
@@ -166,15 +171,15 @@ async function handleSubmitScore(
 		await env.DB.prepare(
 			"UPDATE scores SET player_name = ?, score = ?, link = ?, ip_hash = ?, created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"
 		)
-			.bind(player_name, score, link || null, ipHash, existing.id)
+			.bind(player_name, score, normalizedLink || null, ipHash, existing.id)
 			.run();
 		return json({ success: true, updated: true });
 	}
 
 	await env.DB.prepare(
-		"INSERT INTO scores (game, player_name, score, link, device_id, ip_hash) VALUES ('gribli', ?, ?, ?, ?, ?)"
+		"INSERT INTO scores (game, player_name, score, link, device_id, ip_hash) VALUES (?, ?, ?, ?, ?, ?)"
 	)
-		.bind(player_name, score, link || null, device_id, ipHash)
+		.bind(game, player_name, score, normalizedLink || null, device_id, ipHash)
 		.run();
 
 	return json({ success: true, updated: true }, 201);
@@ -186,12 +191,15 @@ async function handleUpdateProfile(
 	request: Request,
 	env: Env
 ): Promise<Response> {
-	const { player_name, link, device_id, timestamp } = body as {
+	const { player_name, link, device_id, timestamp, game: rawGame } = body as {
 		player_name?: string;
 		link?: string;
 		device_id?: string;
 		timestamp?: number;
+		game?: string;
 	};
+
+	const game = rawGame || "gribli";
 
 	if (!player_name || !device_id) {
 		return json({ error: "Missing required fields" }, 400);
@@ -202,7 +210,8 @@ async function handleUpdateProfile(
 		return json({ error: "Invalid player name" }, 400);
 	}
 
-	if (link && !/^https?:\/\/.+/.test(link)) {
+	const normalizedLink = link && !/^https?:\/\//i.test(link) ? `https://${link}` : link;
+	if (normalizedLink && !/^https?:\/\/.+/.test(normalizedLink)) {
 		return json({ error: "Invalid link" }, 400);
 	}
 
@@ -211,11 +220,11 @@ async function handleUpdateProfile(
 		return json({ error: "Invalid timestamp" }, 400);
 	}
 
-	// Check username uniqueness
+	// Check username uniqueness within game
 	const nameTaken = await env.DB.prepare(
-		"SELECT id FROM scores WHERE player_name = ? AND device_id != ? LIMIT 1"
+		"SELECT id FROM scores WHERE player_name = ? AND device_id != ? AND game = ? LIMIT 1"
 	)
-		.bind(player_name, device_id)
+		.bind(player_name, device_id, game)
 		.first();
 
 	if (nameTaken) {
@@ -223,9 +232,9 @@ async function handleUpdateProfile(
 	}
 
 	await env.DB.prepare(
-		"UPDATE scores SET player_name = ?, link = ? WHERE device_id = ?"
+		"UPDATE scores SET player_name = ?, link = ? WHERE device_id = ? AND game = ?"
 	)
-		.bind(player_name, link || null, device_id)
+		.bind(player_name, normalizedLink || null, device_id, game)
 		.run();
 
 	return json({ success: true });

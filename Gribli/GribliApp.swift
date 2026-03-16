@@ -10,10 +10,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct GribliApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    @State private var showSplash = true
+
     var body: some Scene {
         WindowGroup {
-            GameView()
-                .fontDesign(.rounded)
+            ZStack {
+                GameView()
+
+                if showSplash {
+                    SplashView {
+                        showSplash = false
+                    }
+                }
+            }
+            .fontDesign(.rounded)
         }
     }
 }
