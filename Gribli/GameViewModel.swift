@@ -1,12 +1,7 @@
 import SwiftUI
 
-enum TileType: String, CaseIterable {
-    case apple = "🍏"
-    case cherry = "🍒"
-    case lemon = "🍋"
-    case grape = "🍇"
-    case coconut = "🥥"
-    case peach = "🍑"
+enum TileType: CaseIterable {
+    case olive, red, orange, blue, silver, taupe
 }
 
 struct ScorePopup: Identifiable {
@@ -82,12 +77,12 @@ class GameViewModel {
 
     func color(for type: TileType) -> Color {
         switch type {
-        case .apple: Palette.olive
-        case .cherry: Palette.orangeRed
-        case .lemon: Palette.orange
-        case .grape: Palette.blueGray
-        case .coconut: Palette.silver
-        case .peach: Palette.taupe
+        case .olive: Palette.olive
+        case .red: Palette.orangeRed
+        case .orange: Palette.orange
+        case .blue: Palette.blueGray
+        case .silver: Palette.silver
+        case .taupe: Palette.taupe
         }
     }
 
