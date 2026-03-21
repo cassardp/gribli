@@ -117,6 +117,15 @@ struct GameView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: viewModel.isPaused)
+                .overlay {
+                    if viewModel.isPaused && !viewModel.isGameOver {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                viewModel.togglePause()
+                            }
+                    }
+                }
             }
             .aspectRatio(1, contentMode: .fit)
 
@@ -257,6 +266,11 @@ struct GameView: View {
                 }
             )
             .id(leaderboardId)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            if viewModel.hasStarted && !viewModel.isGameOver && !viewModel.isPaused {
+                viewModel.togglePause()
+            }
         }
     }
 }
