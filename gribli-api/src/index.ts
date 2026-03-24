@@ -9,7 +9,8 @@ export default {
 
 		if (request.method === "GET" && url.pathname === "/scores") {
 			const game = url.searchParams.get("game") || "gribli";
-			return handleGetScores(env, game);
+			const period = url.searchParams.get("period");
+			return handleGetScores(env, game, period === "monthly");
 		}
 
 		// POST and PUT require valid HMAC signature
@@ -66,16 +67,23 @@ async function hashIP(ip: string): Promise<string> {
 		.slice(0, 16);
 }
 
-// GET /scores — Monthly top scores
-async function handleGetScores(env: Env, game: string): Promise<Response> {
-	const monthStart = new Date();
-	monthStart.setUTCDate(1);
-	monthStart.setUTCHours(0, 0, 0, 0);
-	const monthISO = monthStart.toISOString().replace(".000Z", "Z");
+// GET /scores — Leaderboard (all-time by default, monthly with ?period=monthly)
+async function handleGetScores(env: Env, game: string, monthly: boolean): Promise<Response> {
+	if (monthly) {
+		const monthStart = new Date();
+		monthStart.setUTCDate(1);
+		monthStart.setUTCHours(0, 0, 0, 0);
+		const monthISO = monthStart.toISOString().replace(".000Z", "Z");
+
+		const { results } = await env.DB.prepare(
+			"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? AND created_at >= ? ORDER BY score DESC LIMIT 99"
+		).bind(game, monthISO).all();
+		return json(results);
+	}
 
 	const { results } = await env.DB.prepare(
-		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? AND created_at >= ? ORDER BY score DESC LIMIT 99"
-	).bind(game, monthISO).all();
+		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? ORDER BY score DESC LIMIT 99"
+	).bind(game).all();
 	return json(results);
 }
 
