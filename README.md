@@ -27,16 +27,6 @@ Swap emojis, chain combos, trigger bombs, and race against the clock. Every matc
 - Cloudflare Workers + D1 for the leaderboard API
 - Zero third-party dependencies on the client (URLSession + CryptoKit)
 
-## Setup
-
-The app requires a `Gribli/Secrets.swift` file (gitignored) for HMAC request signing:
-
-```swift
-enum Secrets {
-    static let hmacKey = "your_hmac_secret_here"
-}
-```
-
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
