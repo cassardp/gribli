@@ -66,11 +66,16 @@ async function hashIP(ip: string): Promise<string> {
 		.slice(0, 16);
 }
 
-// GET /scores — Top 50 leaderboard
+// GET /scores — Monthly top scores
 async function handleGetScores(env: Env, game: string): Promise<Response> {
+	const monthStart = new Date();
+	monthStart.setUTCDate(1);
+	monthStart.setUTCHours(0, 0, 0, 0);
+	const monthISO = monthStart.toISOString().replace(".000Z", "Z");
+
 	const { results } = await env.DB.prepare(
-		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? ORDER BY score DESC LIMIT 99"
-	).bind(game).all();
+		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? AND created_at >= ? ORDER BY score DESC LIMIT 99"
+	).bind(game, monthISO).all();
 	return json(results);
 }
 
@@ -157,17 +162,22 @@ async function handleSubmitScore(
 		}
 	}
 
-	// Only keep best score per device per game
+	// Only keep best score per device per game per month
 	const existing = await env.DB.prepare(
-		"SELECT id, score FROM scores WHERE device_id = ? AND game = ?"
+		"SELECT id, score, created_at FROM scores WHERE device_id = ? AND game = ?"
 	)
 		.bind(device_id, game)
-		.first<{ id: number; score: number }>();
+		.first<{ id: number; score: number; created_at: string }>();
 
 	if (existing) {
-		if (score <= existing.score) {
+		const existingMonth = existing.created_at.slice(0, 7);
+		const currentMonth = new Date().toISOString().slice(0, 7);
+		const sameMonth = existingMonth === currentMonth;
+
+		if (sameMonth && score <= existing.score) {
 			return json({ success: true, updated: false });
 		}
+
 		await env.DB.prepare(
 			"UPDATE scores SET player_name = ?, score = ?, link = ?, ip_hash = ?, created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"
 		)

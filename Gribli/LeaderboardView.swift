@@ -97,7 +97,7 @@ struct LeaderboardView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 0) {
-                            Text("All Stars")
+                            Text("Monthly Stars")
                                 .font(.title2.weight(.bold))
                                 .foregroundStyle(textColor)
                                 .frame(maxWidth: .infinity)
@@ -199,7 +199,7 @@ struct LeaderboardView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 20)
 
-                Text("Displayed on All Stars.")
+                Text("Displayed on Monthly Stars.")
                     .font(.body)
                     .foregroundStyle(textColor.opacity(0.8))
                     .multilineTextAlignment(.center)
