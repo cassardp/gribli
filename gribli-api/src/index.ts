@@ -103,7 +103,7 @@ async function handleSubmitScore(
 		return json({ error: "Invalid player name" }, 400);
 	}
 
-	if (score > 1_000_000 || !Number.isInteger(score)) {
+	if (!Number.isInteger(score) || score < 0) {
 		return json({ error: "Invalid score" }, 400);
 	}
 
