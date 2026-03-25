@@ -66,16 +66,14 @@ async function hashIP(ip: string): Promise<string> {
 		.slice(0, 16);
 }
 
-// GET /scores — Monthly leaderboard
+// GET /scores — Rolling 30-day leaderboard
 async function handleGetScores(env: Env, game: string): Promise<Response> {
-	const monthStart = new Date();
-	monthStart.setUTCDate(1);
-	monthStart.setUTCHours(0, 0, 0, 0);
-	const monthISO = monthStart.toISOString().replace(".000Z", "Z");
+	const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+	const cutoffISO = cutoff.toISOString().replace(".000Z", "Z");
 
 	const { results } = await env.DB.prepare(
 		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? AND created_at >= ? ORDER BY score DESC LIMIT 99"
-	).bind(game, monthISO).all();
+	).bind(game, cutoffISO).all();
 	return json(results);
 }
 
@@ -162,7 +160,7 @@ async function handleSubmitScore(
 		}
 	}
 
-	// Only keep best score per device per game per month
+	// Only keep best score per device per game within rolling 30 days
 	const existing = await env.DB.prepare(
 		"SELECT id, score, created_at FROM scores WHERE device_id = ? AND game = ?"
 	)
@@ -170,11 +168,10 @@ async function handleSubmitScore(
 		.first<{ id: number; score: number; created_at: string }>();
 
 	if (existing) {
-		const existingMonth = existing.created_at.slice(0, 7);
-		const currentMonth = new Date().toISOString().slice(0, 7);
-		const sameMonth = existingMonth === currentMonth;
+		const ageMs = now - new Date(existing.created_at).getTime();
+		const within30Days = ageMs < 30 * 24 * 60 * 60 * 1000;
 
-		if (sameMonth && score <= existing.score) {
+		if (within30Days && score <= existing.score) {
 			return json({ success: true, updated: false });
 		}
 
