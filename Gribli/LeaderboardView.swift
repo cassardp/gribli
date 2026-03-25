@@ -330,8 +330,13 @@ struct LeaderboardView: View {
                         )
                         infoLink(
                             icon: "pin.fill",
-                            label: "Try Pinpin (my other app)",
+                            label: "Try Pinpin",
                             url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154"
+                        )
+                        infoLink(
+                            icon: "textformat.abc",
+                            label: "Try Capelo",
+                            url: "https://apps.apple.com/fr/app/capelo/id6760834408"
                         )
                     }
 
