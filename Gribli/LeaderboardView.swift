@@ -313,7 +313,7 @@ struct LeaderboardView: View {
                         .padding(.top, 12)
                         .padding(.bottom, -8)
 
-                    Text("Gribli is a minimalist match-3 puzzle game (free, open-source, no ads, no tracking, no in-app purchases, forever). Swap, match, and chase the high score. Add a link to your profile to showcase your project on the leaderboard.")
+                    Text("Swap tiles, chain combos, trigger bombs. Add a link to your profile to get noticed on the monthly leaderboard.")
                         .font(.body)
                         .foregroundStyle(textColor.opacity(0.8))
                         .multilineTextAlignment(.center)
@@ -324,19 +324,19 @@ struct LeaderboardView: View {
 
                     VStack(spacing: 10) {
                         infoLink(
-                            icon: "at",
-                            label: "Follow me on Twitter",
-                            url: "https://x.com/patricecassard"
+                            icon: "textformat.abc",
+                            label: "Capelo",
+                            url: "https://apps.apple.com/fr/app/capelo/id6760834408"
                         )
                         infoLink(
                             icon: "pin.fill",
-                            label: "Try Pinpin",
+                            label: "Pinpin",
                             url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154"
                         )
                         infoLink(
-                            icon: "textformat.abc",
-                            label: "Try Capelo",
-                            url: "https://apps.apple.com/fr/app/capelo/id6760834408"
+                            icon: "at",
+                            label: "Twitter",
+                            url: "https://x.com/patricecassard"
                         )
                     }
 

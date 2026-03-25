@@ -17,19 +17,15 @@ struct SplashView: View {
     ]
 
     // [A, A, B, A, B, B] — swap pos 2↔3 → AAA + BBB → all matched
-    @State private var tiles: [SplashTile] = {
-        var indices = Array(0..<tileColors.count)
-        indices.shuffle()
-        let a = indices[0], b = indices[1]
-        return [
-            SplashTile(colorIndex: a, position: 0),
-            SplashTile(colorIndex: a, position: 1),
-            SplashTile(colorIndex: b, position: 2),
-            SplashTile(colorIndex: a, position: 3),
-            SplashTile(colorIndex: b, position: 4),
-            SplashTile(colorIndex: b, position: 5),
-        ]
-    }()
+    // Fixed colors: red (index 1) and silver (index 4)
+    @State private var tiles: [SplashTile] = [
+        SplashTile(colorIndex: 1, position: 0),
+        SplashTile(colorIndex: 1, position: 1),
+        SplashTile(colorIndex: 4, position: 2),
+        SplashTile(colorIndex: 1, position: 3),
+        SplashTile(colorIndex: 4, position: 4),
+        SplashTile(colorIndex: 4, position: 5),
+    ]
 
     @State private var matchedPositions: Set<Int> = []
     @State private var completed = false
@@ -41,6 +37,7 @@ struct SplashView: View {
     @State private var tilesOffset: CGFloat = 40
     @State private var tilesOpacity: Double = 0
     @State private var hintOpacity: Double = 0
+    @State private var hintPulsing = false
 
     @State private var demoActive = false
     @State private var userInteracted = false
@@ -66,9 +63,11 @@ struct SplashView: View {
             splashTiles
 
             Text("Swipe")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(textColor.opacity(0.4))
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(textColor.opacity(0.6))
                 .opacity(hintOpacity)
+                .scaleEffect(hintPulsing ? 1.08 : 1.0)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: hintPulsing)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(bgColor.ignoresSafeArea())
@@ -84,7 +83,10 @@ struct SplashView: View {
             withAnimation(.easeIn(duration: 0.6).delay(0.8)) {
                 hintOpacity = 1.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                hintPulsing = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                 startDemoLoop()
             }
         }
@@ -113,7 +115,7 @@ struct SplashView: View {
                         .fill(Self.tileColors[tile.colorIndex])
                         .padding(4)
                         .frame(width: tileSize, height: tileSize)
-                        .scaleEffect(isMatched && !exploding ? 1.15 : 1.0)
+                        .scaleEffect(isMatched && !exploding ? 1.05 : 1.0)
                         .brightness(isMatched && !exploding ? 0.12 : 0)
                         .offset(x: exploding ? offsets.x : 0, y: exploding ? offsets.y : 0)
                         .rotationEffect(.degrees(exploding ? offsets.rotation : 0))
@@ -139,7 +141,7 @@ struct SplashView: View {
                 Circle()
                     .fill(textColor.opacity(0.18))
                     .frame(width: tileSize * 0.7, height: tileSize * 0.7)
-                    .position(x: demoFingerX, y: geo.size.height / 2)
+                    .position(x: demoFingerX, y: geo.size.height / 2 + tileSize * 0.3)
                     .opacity(demoFingerOpacity)
             }
             .offset(y: tilesOffset)
@@ -222,9 +224,9 @@ struct SplashView: View {
             demoFingerOpacity = 1.0
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             guard demoActive else { return }
-            withAnimation(.easeInOut(duration: 0.35)) {
+            withAnimation(.easeInOut(duration: 0.5)) {
                 demoFingerX = endX
             }
             withAnimation(.spring(duration: 0.3)) {
@@ -233,17 +235,9 @@ struct SplashView: View {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             guard demoActive else { return }
             withAnimation(.easeOut(duration: 0.2)) {
-                matchedPositions = Set(0..<6)
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            guard demoActive else { return }
-            withAnimation(.easeOut(duration: 0.2)) {
-                matchedPositions = []
                 demoFingerOpacity = 0
             }
             withAnimation(.spring(duration: 0.3)) {
@@ -252,7 +246,7 @@ struct SplashView: View {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
             guard demoActive else { return }
             startDemoLoop()
         }
