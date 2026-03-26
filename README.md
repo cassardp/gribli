@@ -24,8 +24,6 @@ Swap emojis, chain combos, trigger bombs, and race against the clock. Every matc
 ## Tech
 
 - Swift / SwiftUI — iOS 17.6+
-- Cloudflare Workers + D1 for the leaderboard API
-- Zero third-party dependencies on the client (URLSession + CryptoKit)
 
 ## License
 
