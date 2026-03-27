@@ -75,17 +75,6 @@ class GameViewModel {
         timerTask?.cancel()
     }
 
-    func color(for type: TileType) -> Color {
-        switch type {
-        case .olive: Palette.olive
-        case .red: Palette.orangeRed
-        case .orange: Palette.orange
-        case .blue: Palette.blueGray
-        case .silver: Palette.silver
-        case .taupe: Palette.taupe
-        }
-    }
-
     func setupGrid() {
         score = 0
         selectedTile = nil

@@ -10,11 +10,12 @@ struct SplashView: View {
     let onPlay: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(PaletteStore.self) private var palette
 
-    private static let tileColors: [Color] = [
-        Palette.olive, Palette.orangeRed, Palette.orange,
-        Palette.blueGray, Palette.silver, Palette.taupe
-    ]
+    private var tileColors: [Color] {
+        [palette.olive, palette.orangeRed, palette.orange,
+         palette.blueGray, palette.silver, palette.taupe]
+    }
 
     // [A, A, B, A, B, B] — swap pos 2↔3 → AAA + BBB → all matched
     // Fixed colors: red (index 1) and silver (index 4)
@@ -112,7 +113,7 @@ struct SplashView: View {
                     let offsets = explosionOffsets[tile.id] ?? (x: 0.0, y: 0.0, rotation: 0.0)
 
                     Circle()
-                        .fill(Self.tileColors[tile.colorIndex])
+                        .fill(tileColors[tile.colorIndex])
                         .padding(4)
                         .frame(width: tileSize, height: tileSize)
                         .scaleEffect(isMatched && !exploding ? 1.05 : 1.0)

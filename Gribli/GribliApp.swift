@@ -11,6 +11,7 @@ struct GribliApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     @State private var showSplash = true
+    @State private var paletteStore = PaletteStore()
 
     var body: some Scene {
         WindowGroup {
@@ -24,6 +25,8 @@ struct GribliApp: App {
                 }
             }
             .fontDesign(.rounded)
+            .environment(paletteStore)
+            .preferredColorScheme(paletteStore.appearanceMode.colorScheme)
         }
     }
 }

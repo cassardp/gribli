@@ -9,6 +9,7 @@ struct GameView: View {
     @State private var leaderboardId = UUID()
     @State private var showPauseHint = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(PaletteStore.self) private var palette
     private var bgColor: Color { Palette.background(for: colorScheme) }
     private var textColor: Color { Palette.text(for: colorScheme) }
     private var isUrgent: Bool { viewModel.timeRemaining <= 10 && viewModel.timeRemaining > 0 && viewModel.hasStarted && !viewModel.isGameOver }
@@ -26,7 +27,7 @@ struct GameView: View {
                     .contentTransition(.numericText())
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(viewModel.isNewBest ? Palette.orangeRed : textColor.opacity(0.12), in: Capsule())
+                    .background(viewModel.isNewBest ? palette.orangeRed : textColor.opacity(0.12), in: Capsule())
                     .animation(.easeOut(duration: 0.3), value: viewModel.isNewBest)
                 if viewModel.isGameOver {
                     Text("Game Over")
@@ -55,7 +56,7 @@ struct GameView: View {
                     ForEach(viewModel.engine.allTiles) { tile in
                         TileView(
                             tile: tile,
-                            color: viewModel.color(for: tile.type),
+                            color: palette.color(for: tile.type),
                             isSelected: viewModel.selectedTile?.id == tile.id,
                             isBombFlashed: viewModel.bombFlashTiles.contains(tile.id),
                             isPaused: viewModel.isPaused,
@@ -132,12 +133,12 @@ struct GameView: View {
             Spacer()
 
             RoundedRectangle(cornerRadius: 3)
-                .fill(isUrgent && !viewModel.isPaused ? Palette.orangeRed.opacity(0.15) : textColor.opacity(0.15))
+                .fill(isUrgent && !viewModel.isPaused ? palette.orangeRed.opacity(0.15) : textColor.opacity(0.15))
                 .frame(height: 6)
                 .overlay(alignment: .leading) {
                     GeometryReader { barGeo in
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(isUrgent && !viewModel.isPaused ? Palette.orangeRed : textColor)
+                            .fill(isUrgent && !viewModel.isPaused ? palette.orangeRed : textColor)
                             .frame(width: barGeo.size.width * (barFillAnimating ? min(viewModel.timeRemaining / 60, 1.0) : 0))
                     }
                 }
@@ -153,7 +154,7 @@ struct GameView: View {
                             .contentTransition(.numericText())
                             .animation(.spring(duration: 0.3), value: Int(viewModel.timeRemaining))
                             .padding(16)
-                            .background(Palette.orangeRed, in: Circle())
+                            .background(palette.orangeRed, in: Circle())
                             .keyframeAnimator(initialValue: CGFloat(1.0), trigger: Int(viewModel.timeRemaining)) { content, scale in
                                 content.scaleEffect(scale)
                             } keyframes: { _ in
@@ -266,6 +267,7 @@ struct GameView: View {
                 }
             )
             .id(leaderboardId)
+            .preferredColorScheme(palette.appearanceMode.colorScheme)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             if viewModel.hasStarted && !viewModel.isGameOver && !viewModel.isPaused {
