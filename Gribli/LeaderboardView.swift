@@ -42,12 +42,12 @@ struct LeaderboardView: View {
         self.onSave = onSave
     }
 
-    private let tabIcons = [["star", "star"], ["signature", "signature"], ["info", "info"], ["slider.horizontal.3", "slider.horizontal.3"]]
+    private let tabIcons = [["star", "star"], ["signature", "signature"], ["info", "info"]]
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 32) {
-                ForEach(0..<4) { i in
+                ForEach(0..<3) { i in
                     Button {
                         withAnimation { selectedTab = i }
                     } label: {
@@ -65,7 +65,6 @@ struct LeaderboardView: View {
                 scoresPage.tag(0)
                 profilePage.tag(1)
                 infoPage.tag(2)
-                SettingsView().tag(3)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea(edges: .bottom)
@@ -267,8 +266,86 @@ struct LeaderboardView: View {
                     .padding(.top, 36)
                 }
 
+                // MARK: - Settings
+
+                Rectangle()
+                    .fill(textColor.opacity(0.1))
+                    .frame(height: 1)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 36)
+                    .padding(.bottom, 24)
+
+                HStack(spacing: 8) {
+                    ForEach(PaletteStore.AppearanceMode.allCases, id: \.self) { mode in
+                        Button {
+                            palette.appearanceMode = mode
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: mode == .dark ? "moon.fill" : "sun.max.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(mode.label)
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            .foregroundStyle(palette.appearanceMode == mode ? Palette.background(for: colorScheme) : textColor)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .background(palette.appearanceMode == mode ? textColor : textColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+
+                // MARK: - Colors
+
+                Spacer().frame(height: 10)
+
+                ForEach(PaletteStore.definitions) { def in
+                    settingsColorRow(def: def)
+                }
+
+                if palette.isCustomized {
+                    Button {
+                        withAnimation { palette.reset() }
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(textColor.opacity(0.35))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 12)
+                }
             }
+            .padding(.bottom, 20)
         }
+    }
+
+    private func settingsColorRow(def: PaletteStore.GameColor) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(palette.colors[def.id] ?? def.defaultColor)
+                .frame(width: 36, height: 36)
+
+            Text(def.label)
+                .font(.body.weight(.medium))
+                .foregroundStyle(textColor)
+
+            Spacer()
+
+            ColorPicker("", selection: Binding(
+                get: { palette.colors[def.id] ?? def.defaultColor },
+                set: {
+                    palette.colors[def.id] = $0
+                    palette.save()
+                }
+            ), supportsOpacity: false)
+            .labelsHidden()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(textColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 3)
     }
 
     enum FieldStatus { case error }
@@ -325,21 +402,26 @@ struct LeaderboardView: View {
                     Spacer()
 
                     VStack(spacing: 10) {
-                        infoLink(
-                            icon: "textformat.abc",
-                            label: "Capelo",
-                            url: "https://apps.apple.com/fr/app/capelo/id6760834408"
-                        )
-                        infoLink(
-                            icon: "pin.fill",
-                            label: "Pinpin",
-                            url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154"
-                        )
-                        infoLink(
-                            icon: "at",
-                            label: "Twitter",
-                            url: "https://x.com/patricecassard"
-                        )
+                        Text("My Other Apps")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(textColor.opacity(0.35))
+                            .textCase(.uppercase)
+
+                        HStack(spacing: 8) {
+                            infoLink(label: "Capelo", url: "https://apps.apple.com/fr/app/capelo/id6760834408")
+                            infoLink(label: "Keblo", url: "https://apps.apple.com/app/keblo/id6746017785")
+                            infoLink(label: "Pinpin", url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154")
+                        }
+                    }
+
+                    Link(destination: URL(string: "https://x.com/patricecassard")!) {
+                        HStack(spacing: 8) {
+                            Text("Follow me on X")
+                                .font(.subheadline.weight(.medium))
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .foregroundStyle(textColor.opacity(0.5))
                     }
 
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")")
@@ -353,31 +435,14 @@ struct LeaderboardView: View {
         }
     }
 
-    private func infoLink(icon: String, label: String, url: String) -> some View {
+    private func infoLink(label: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(textColor)
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Image(systemName: icon)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(bgColor)
-                    )
-
-                Text(label)
-                    .font(.body.weight(.medium))
-
-                Spacer()
-
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 11))
-                    .opacity(0.4)
-            }
-            .foregroundStyle(textColor)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(textColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            Text(label)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(textColor)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(textColor.opacity(0.06), in: Capsule())
         }
     }
 
