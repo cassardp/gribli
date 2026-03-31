@@ -1,6 +1,7 @@
 interface Env {
 	DB: D1Database;
 	HMAC_SECRET: string;
+	HMAC_SECRET_OLD?: string;
 }
 
 export default {
@@ -16,7 +17,10 @@ export default {
 		if (request.method === "POST" || request.method === "PUT") {
 			const signature = request.headers.get("X-Signature");
 			const body = await request.text();
-			if (!signature || !(await verifyHMAC(env.HMAC_SECRET, body, signature))) {
+			const validSig =
+				(await verifyHMAC(env.HMAC_SECRET, body, signature!)) ||
+				(env.HMAC_SECRET_OLD && (await verifyHMAC(env.HMAC_SECRET_OLD, body, signature!)));
+			if (!signature || !validSig) {
 				return json({ error: "Unauthorized" }, 401);
 			}
 			const parsed = JSON.parse(body) as Record<string, unknown>;
