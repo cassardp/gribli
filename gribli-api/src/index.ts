@@ -70,14 +70,11 @@ async function hashIP(ip: string): Promise<string> {
 		.slice(0, 16);
 }
 
-// GET /scores — Rolling 30-day leaderboard
+// GET /scores — All-time top 100 leaderboard
 async function handleGetScores(env: Env, game: string): Promise<Response> {
-	const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-	const cutoffISO = cutoff.toISOString().replace(".000Z", "Z");
-
 	const { results } = await env.DB.prepare(
-		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? AND created_at >= ? ORDER BY score DESC LIMIT 99"
-	).bind(game, cutoffISO).all();
+		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? ORDER BY score DESC LIMIT 100"
+	).bind(game).all();
 	return json(results);
 }
 
@@ -164,7 +161,7 @@ async function handleSubmitScore(
 		}
 	}
 
-	// Only keep best score per device per game within rolling 30 days
+	// Only keep best all-time score per device per game
 	const existing = await env.DB.prepare(
 		"SELECT id, score, created_at FROM scores WHERE device_id = ? AND game = ?"
 	)
@@ -172,10 +169,7 @@ async function handleSubmitScore(
 		.first<{ id: number; score: number; created_at: string }>();
 
 	if (existing) {
-		const ageMs = now - new Date(existing.created_at).getTime();
-		const within30Days = ageMs < 30 * 24 * 60 * 60 * 1000;
-
-		if (within30Days && score <= existing.score) {
+		if (score <= existing.score) {
 			return json({ success: true, updated: false });
 		}
 
