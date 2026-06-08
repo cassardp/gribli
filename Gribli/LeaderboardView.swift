@@ -409,7 +409,7 @@ struct LeaderboardView: View {
 
                         HStack(spacing: 8) {
                             infoLink(label: "Capelo", url: "https://apps.apple.com/fr/app/capelo/id6760834408")
-                            infoLink(label: "Keblo", url: "https://apps.apple.com/app/keblo/id6746017785")
+                            infoLink(label: "Keblo", url: "https://apps.apple.com/app/keblo/id6760995344")
                             infoLink(label: "Pinpin", url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154")
                         }
                     }
