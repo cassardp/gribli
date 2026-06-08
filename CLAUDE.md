@@ -25,11 +25,11 @@ Gribli is a timed match-3 puzzle game (iOS, iPhone only) built with Swift/SwiftU
 
 - `GameViewModel` — single source of truth for all game state, timer, scoring, haptics. Persists best score and player info to UserDefaults.
 - `GridEngine` — pure game logic: 8×8 grid, match detection, gravity, bomb expansion, hint finding. No UI dependencies.
-- Views: `GameView` (main screen + grid + gestures) → `TileView` (individual tile rendering/animation) → `LeaderboardView` (scores, profile editing, about tab)
+- Views: `SplashView` (interactive intro with demo swipe-to-match) → `GameView` (main screen + grid + gestures) → `TileView` (individual tile rendering/animation) → `LeaderboardView` (scores, profile editing, about tab)
 
 **Game loop:** User tap/swipe → `trySwap()` → `processCascade()` (find matches → expand bombs → apply gravity → spawn tiles → repeat until stable) → check for valid moves (shuffle if none)
 
-**Key models:** `Tile` (id, type, row, col, isMatched, isBomb), `TileType` (6 fruit emoji), `ScoreEntry` (leaderboard row)
+**Key models:** `Tile` (id, type, row, col, isMatched, isBomb), `TileType` (6 colored circles: olive, red, orange, blue, silver, taupe), `ScoreEntry` (leaderboard row)
 
 ## Color System
 
