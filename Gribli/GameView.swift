@@ -8,6 +8,10 @@ struct GameView: View {
     @State private var leaderboardProfileMode = 0
     @State private var leaderboardId = UUID()
     @State private var showPauseHint = false
+    @State private var dragTileId: UUID?
+    @State private var dragAxis: Axis?
+    @State private var dragOffsets: [UUID: CGSize] = [:]
+    @State private var dragPastThreshold = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(PaletteStore.self) private var palette
     private var bgColor: Color { Palette.background(for: colorScheme) }
@@ -16,6 +20,103 @@ struct GameView: View {
 
     init() {
         _viewModel = State(initialValue: GameViewModel())
+    }
+
+    // Classic UIScrollView-style resistance: ~1:1 near zero, saturating toward
+    // `dimension` so the tile feels elastic instead of rigidly tracking the finger.
+    private func rubberBand(_ offset: CGFloat, dimension: CGFloat, factor: CGFloat) -> CGFloat {
+        let m = abs(offset)
+        let resisted = (1 - 1 / (m * factor / dimension + 1)) * dimension
+        return offset < 0 ? -resisted : resisted
+    }
+
+    private func tileDragGesture(_ tile: Tile, tileSize: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard !viewModel.isAnimating, !viewModel.isGameOver, !viewModel.isPaused else { return }
+                let t = value.translation
+                if dragTileId == nil {
+                    guard max(abs(t.width), abs(t.height)) >= 8 else { return }
+                    dragTileId = tile.id
+                    dragAxis = abs(t.width) > abs(t.height) ? .horizontal : .vertical
+                }
+                guard dragTileId == tile.id, let axis = dragAxis else { return }
+
+                let raw = axis == .horizontal ? t.width : t.height
+                let sign: CGFloat = raw >= 0 ? 1 : -1
+                let nr = tile.row + (axis == .vertical ? Int(sign) : 0)
+                let nc = tile.col + (axis == .horizontal ? Int(sign) : 0)
+
+                func offset(_ d: CGFloat) -> CGSize {
+                    axis == .horizontal ? CGSize(width: d, height: 0) : CGSize(width: 0, height: d)
+                }
+
+                guard nr >= 0, nr < viewModel.engine.rows, nc >= 0, nc < viewModel.engine.cols else {
+                    // No neighbour that way: let the grabbed tile give a little
+                    // against the edge with strong resistance.
+                    dragOffsets = [tile.id: offset(rubberBand(raw, dimension: tileSize, factor: 0.3))]
+                    dragPastThreshold = false
+                    return
+                }
+
+                let neighbor = viewModel.engine.grid[nr][nc]
+                let m = abs(raw)
+                let threshold = tileSize * 0.5
+                let pullMag: CGFloat
+                if m <= threshold {
+                    // Below the commit threshold: elastic resistance, the tile "holds back".
+                    pullMag = rubberBand(m, dimension: tileSize, factor: 1.5)
+                } else {
+                    // Past the threshold: magnetise toward the target cell with a
+                    // little overshoot, so the swap feels actively pulled in.
+                    let base = rubberBand(threshold, dimension: tileSize, factor: 1.5)
+                    let p = min((m - threshold) / (tileSize - threshold), 1)
+                    let eased = p * p * (3 - 2 * p)
+                    pullMag = base + (tileSize * 1.06 - base) * eased
+                }
+                let pull: CGFloat = raw < 0 ? -pullMag : pullMag
+                dragOffsets = [tile.id: offset(pull), neighbor.id: offset(-pull)]
+
+                let past = m > threshold
+                if past != dragPastThreshold {
+                    dragPastThreshold = past
+                    if past { viewModel.swapThresholdHaptic() }
+                }
+            }
+            .onEnded { value in
+                let wasLocked = dragTileId == tile.id && dragAxis != nil
+                let axis = dragAxis
+                dragTileId = nil
+                dragAxis = nil
+                dragPastThreshold = false
+                let t = value.translation
+
+                guard wasLocked, let axis else {
+                    dragOffsets = [:]
+                    if max(abs(t.width), abs(t.height)) < 8 {
+                        viewModel.tileTapped(tile)
+                    }
+                    return
+                }
+
+                let raw = axis == .horizontal ? t.width : t.height
+                let sign = raw >= 0 ? 1 : -1
+                let dRow = axis == .vertical ? sign : 0
+                let dCol = axis == .horizontal ? sign : 0
+                let nr = tile.row + dRow, nc = tile.col + dCol
+                let hasNeighbor = nr >= 0 && nr < viewModel.engine.rows && nc >= 0 && nc < viewModel.engine.cols
+
+                if hasNeighbor && abs(raw) > tileSize * 0.5 {
+                    withAnimation(.spring(duration: 0.3, bounce: 0.34)) {
+                        dragOffsets = [:]
+                        viewModel.beginDragSwap(tile, dRow: dRow, dCol: dCol)
+                    }
+                } else {
+                    withAnimation(.spring(duration: 0.4, bounce: 0.45)) {
+                        dragOffsets = [:]
+                    }
+                }
+            }
     }
 
     var body: some View {
@@ -54,6 +155,7 @@ struct GameView: View {
 
                 ZStack(alignment: .topLeading) {
                     ForEach(viewModel.engine.allTiles) { tile in
+                        let extra = dragOffsets[tile.id] ?? .zero
                         TileView(
                             tile: tile,
                             color: palette.color(for: tile.type),
@@ -64,26 +166,20 @@ struct GameView: View {
                             size: tileSize
                         )
                         .offset(
-                            x: CGFloat(tile.col) * tileSize,
-                            y: CGFloat(tile.row) * tileSize
+                            x: CGFloat(tile.col) * tileSize + extra.width,
+                            y: CGFloat(tile.row) * tileSize + extra.height
                         )
+                        .zIndex(dragOffsets.keys.contains(tile.id) ? 1 : 0)
                         .transition(.identity)
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onEnded { value in
-                                    let dx = value.translation.width
-                                    let dy = value.translation.height
-                                    if max(abs(dx), abs(dy)) < 6 {
-                                        viewModel.tileTapped(tile)
-                                    } else if max(abs(dx), abs(dy)) >= 15 {
-                                        if abs(dx) > abs(dy) {
-                                            viewModel.tileSwiped(tile, dRow: 0, dCol: dx > 0 ? 1 : -1)
-                                        } else {
-                                            viewModel.tileSwiped(tile, dRow: dy > 0 ? 1 : -1, dCol: 0)
-                                        }
-                                    }
-                                }
-                        )
+                        .gesture(tileDragGesture(tile, tileSize: tileSize))
+                    }
+                    ForEach(viewModel.matchRipples) { ripple in
+                        RippleView(size: tileSize, color: textColor)
+                            .offset(
+                                x: CGFloat(ripple.col) * tileSize,
+                                y: CGFloat(ripple.row) * tileSize
+                            )
+                            .allowsHitTesting(false)
                     }
                 }
                 .frame(width: geo.size.width, height: gridHeight, alignment: .topLeading)
@@ -274,5 +370,22 @@ struct GameView: View {
                 viewModel.togglePause()
             }
         }
+    }
+}
+
+private struct RippleView: View {
+    let size: CGFloat
+    let color: Color
+    @State private var animate = false
+
+    var body: some View {
+        Circle()
+            .stroke(color.opacity(0.4), lineWidth: 1.5)
+            .frame(width: size, height: size)
+            .scaleEffect(animate ? 1.55 : 0.7)
+            .opacity(animate ? 0 : 0.45)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.4)) { animate = true }
+            }
     }
 }

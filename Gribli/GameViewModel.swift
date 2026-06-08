@@ -10,6 +10,12 @@ struct ScorePopup: Identifiable {
     var chain: Int = 1
 }
 
+struct MatchRipple: Identifiable {
+    let id = UUID()
+    let row: Double
+    let col: Double
+}
+
 struct Tile: Identifiable, Equatable {
     let id: UUID
     var type: TileType
@@ -32,6 +38,7 @@ class GameViewModel {
     }
     var isNewBest = false
     var scorePopups: [ScorePopup] = []
+    var matchRipples: [MatchRipple] = []
     var timeRemaining: Double = 30
     var isGameOver = false
     var hasStarted = false
@@ -86,6 +93,7 @@ class GameViewModel {
         isPaused = false
         timerTask?.cancel()
         scorePopups.removeAll()
+        matchRipples.removeAll()
         engine.buildGrid()
         timeRemaining = 30
     }
@@ -114,6 +122,31 @@ class GameViewModel {
 
     func togglePause() {
         isPaused.toggle()
+    }
+
+    // Light tick when the drag crosses the commit threshold, so the swap feels
+    // magnetically "snapped" into place.
+    func swapThresholdHaptic() {
+        if hapticsEnabled { lightHaptic.impactOccurred(intensity: 0.6) }
+    }
+
+    // Spawns a single expanding halo at the centroid of a matched group.
+    private func emitRipple(for matches: Set<UUID>) {
+        var sumRow = 0.0, sumCol = 0.0, count = 0.0
+        for r in 0..<engine.rows {
+            for c in 0..<engine.cols where matches.contains(engine.grid[r][c].id) {
+                sumRow += Double(r)
+                sumCol += Double(c)
+                count += 1
+            }
+        }
+        guard count > 0 else { return }
+        let ripple = MatchRipple(row: sumRow / count, col: sumCol / count)
+        matchRipples.append(ripple)
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            matchRipples.removeAll { $0.id == ripple.id }
+        }
     }
 
     private func showPopup(_ text: String, chain: Int = 1) {
@@ -164,15 +197,19 @@ class GameViewModel {
         }
     }
 
-    func tileSwiped(_ tile: Tile, dRow: Int, dCol: Int) {
+    // Commits a swap that the user already dragged into place. The caller wraps
+    // this in its own `withAnimation` so the residual drag offset and the cell
+    // change animate together — no visual jump at release.
+    func beginDragSwap(_ tile: Tile, dRow: Int, dCol: Int) {
         guard !isAnimating, !isGameOver, !isPaused else { return }
         if !hasStarted { startGame() }
-        let newRow = tile.row + dRow
-        let newCol = tile.col + dCol
-        guard newRow >= 0, newRow < engine.rows, newCol >= 0, newCol < engine.cols else { return }
-        selectedTile = tile
-        let neighbor = engine.grid[newRow][newCol]
-        Task { await trySwap(tile, neighbor) }
+        let r1 = tile.row, c1 = tile.col
+        let r2 = r1 + dRow, c2 = c1 + dCol
+        guard r2 >= 0, r2 < engine.rows, c2 >= 0, c2 < engine.cols else { return }
+        isAnimating = true
+        selectedTile = nil
+        engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
+        Task { await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2) }
     }
 
     // MARK: - Swap
@@ -181,14 +218,18 @@ class GameViewModel {
         isAnimating = true
         let r1 = a.row, c1 = a.col, r2 = b.row, c2 = b.col
 
-        withAnimation(.spring(duration: 0.25)) {
+        withAnimation(.spring(duration: 0.28, bounce: 0.3)) {
             engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
         }
-        try? await Task.sleep(for: .milliseconds(220))
         selectedTile = nil
+        await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2)
+    }
+
+    private func resolveSwap(r1: Int, c1: Int, r2: Int, c2: Int) async {
+        try? await Task.sleep(for: .milliseconds(220))
 
         if engine.findMatches().isEmpty {
-            withAnimation(.spring(duration: 0.3)) {
+            withAnimation(.spring(duration: 0.36, bounce: 0.45)) {
                 engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
             }
             try? await Task.sleep(for: .milliseconds(300))
@@ -226,9 +267,10 @@ class GameViewModel {
                 matches = rawMatches
             }
 
-            withAnimation(.easeOut(duration: 0.18)) {
+            withAnimation(.spring(duration: 0.26, bounce: 0.4)) {
                 engine.markMatched(matches)
             }
+            emitRipple(for: matches)
             if hapticsEnabled {
                 let intensity = min(1.0, 0.5 + Double(chain) * 0.15)
                 if hasBomb {
@@ -257,12 +299,12 @@ class GameViewModel {
 
             try? await Task.sleep(for: .milliseconds(150))
 
-            withAnimation(.spring(duration: 0.25)) {
+            withAnimation(.spring(duration: 0.32, bounce: 0.28)) {
                 engine.applyGravityAndSpawn()
             }
             if chain >= 4 { engine.spawnBomb() }
             try? await Task.sleep(for: .milliseconds(50))
-            withAnimation(.spring(duration: 0.25)) {
+            withAnimation(.spring(duration: 0.32, bounce: 0.28)) {
                 engine.dropNewTiles()
             }
             try? await Task.sleep(for: .milliseconds(200))

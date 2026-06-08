@@ -11,6 +11,18 @@ struct TileView: View {
 
     @State private var shakeTrigger = false
 
+    private var baseScale: CGFloat {
+        if tile.isMatched { return 1.4 }
+        if isBombFlashed { return 1.15 }
+        return isSelected ? 0.85 : 1
+    }
+
+    private var baseBrightness: Double {
+        if tile.isMatched { return 0.35 }
+        if isBombFlashed { return 0.3 }
+        return isSelected ? 0.12 : 0
+    }
+
     var body: some View {
         Circle()
             .fill(isBombFlashed ? Palette.cream : color)
@@ -25,8 +37,8 @@ struct TileView: View {
                 }
             }
             .frame(width: size, height: size)
-            .scaleEffect(isBombFlashed ? 1.15 : (isSelected ? 0.85 : 1))
-            .brightness(isBombFlashed ? 0.3 : (isSelected ? 0.12 : 0))
+            .scaleEffect(baseScale)
+            .brightness(baseBrightness)
             .animation(.easeOut(duration: 0.15), value: isSelected)
             .keyframeAnimator(initialValue: CGFloat.zero, trigger: shakeTrigger) { content, value in
                 content.offset(x: value)
@@ -43,6 +55,13 @@ struct TileView: View {
                 CubicKeyframe(0.5 * d, duration: 0.25)
                 CubicKeyframe(-0.2 * d, duration: 0.25)
                 CubicKeyframe(0, duration: 0.3)
+            }
+            .keyframeAnimator(initialValue: CGFloat(1), trigger: tile.row * 8 + tile.col) { content, scale in
+                content.scaleEffect(scale)
+            } keyframes: { _ in
+                LinearKeyframe(1.0, duration: 0.26)
+                SpringKeyframe(0.93, duration: 0.10)
+                SpringKeyframe(1.0, duration: 0.22, spring: .bouncy)
             }
             .opacity(tile.isMatched ? 0 : 1)
             .onChange(of: isGameOver) {
