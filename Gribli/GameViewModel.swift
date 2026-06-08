@@ -226,15 +226,19 @@ class GameViewModel {
     }
 
     private func resolveSwap(r1: Int, c1: Int, r2: Int, c2: Int) async {
-        try? await Task.sleep(for: .milliseconds(220))
-
         if engine.findMatches().isEmpty {
+            // No match: let the swap land fully, then revert with a clear
+            // back-and-forth so the failed move reads.
+            try? await Task.sleep(for: .milliseconds(180))
             withAnimation(.spring(duration: 0.36, bounce: 0.45)) {
                 engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
             }
             try? await Task.sleep(for: .milliseconds(300))
             isAnimating = false
         } else {
+            // Match: just a brief beat so the swap reads, then pop immediately —
+            // no dead time between the swipe landing and the match firing.
+            try? await Task.sleep(for: .milliseconds(120))
             await processCascade()
         }
     }
@@ -267,9 +271,9 @@ class GameViewModel {
                 matches = rawMatches
             }
 
-            withAnimation(.spring(duration: 0.26, bounce: 0.4)) {
-                engine.markMatched(matches)
-            }
+            // The bloom/collapse pop is driven by a keyframe animator in TileView,
+            // keyed on `isMatched`, so this is just a plain state flip.
+            engine.markMatched(matches)
             emitRipple(for: matches)
             if hapticsEnabled {
                 let intensity = min(1.0, 0.5 + Double(chain) * 0.15)
@@ -297,7 +301,9 @@ class GameViewModel {
             showPopup("+\(points)", chain: chain)
             chain += 1
 
-            try? await Task.sleep(for: .milliseconds(150))
+            // Let the two-phase pop (~0.28s) complete before gravity yanks the
+            // matched tiles out — otherwise the bloom gets cut mid-animation.
+            try? await Task.sleep(for: .milliseconds(280))
 
             withAnimation(.spring(duration: 0.32, bounce: 0.28)) {
                 engine.applyGravityAndSpawn()

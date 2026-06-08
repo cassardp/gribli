@@ -22,19 +22,13 @@ struct GameView: View {
         _viewModel = State(initialValue: GameViewModel())
     }
 
-    // Classic UIScrollView-style resistance: ~1:1 near zero, saturating toward
-    // `dimension` so the tile feels elastic instead of rigidly tracking the finger.
-    private func rubberBand(_ offset: CGFloat, dimension: CGFloat, factor: CGFloat) -> CGFloat {
-        let m = abs(offset)
-        let resisted = (1 - 1 / (m * factor / dimension + 1)) * dimension
-        return offset < 0 ? -resisted : resisted
-    }
-
     private func tileDragGesture(_ tile: Tile, tileSize: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard !viewModel.isAnimating, !viewModel.isGameOver, !viewModel.isPaused else { return }
                 let t = value.translation
+
+                // Lock onto one axis once the finger has clearly moved.
                 if dragTileId == nil {
                     guard max(abs(t.width), abs(t.height)) >= 8 else { return }
                     dragTileId = tile.id
@@ -43,41 +37,26 @@ struct GameView: View {
                 guard dragTileId == tile.id, let axis = dragAxis else { return }
 
                 let raw = axis == .horizontal ? t.width : t.height
-                let sign: CGFloat = raw >= 0 ? 1 : -1
-                let nr = tile.row + (axis == .vertical ? Int(sign) : 0)
-                let nc = tile.col + (axis == .horizontal ? Int(sign) : 0)
+                let dir = raw >= 0 ? 1 : -1
+                let nr = tile.row + (axis == .vertical ? dir : 0)
+                let nc = tile.col + (axis == .horizontal ? dir : 0)
+                let hasNeighbor = nr >= 0 && nr < viewModel.engine.rows && nc >= 0 && nc < viewModel.engine.cols
 
                 func offset(_ d: CGFloat) -> CGSize {
                     axis == .horizontal ? CGSize(width: d, height: 0) : CGSize(width: 0, height: d)
                 }
 
-                guard nr >= 0, nr < viewModel.engine.rows, nc >= 0, nc < viewModel.engine.cols else {
-                    // No neighbour that way: let the grabbed tile give a little
-                    // against the edge with strong resistance.
-                    dragOffsets = [tile.id: offset(rubberBand(raw, dimension: tileSize, factor: 0.3))]
-                    dragPastThreshold = false
-                    return
-                }
-
-                let neighbor = viewModel.engine.grid[nr][nc]
-                let m = abs(raw)
-                let threshold = tileSize * 0.5
-                let pullMag: CGFloat
-                if m <= threshold {
-                    // Below the commit threshold: elastic resistance, the tile "holds back".
-                    pullMag = rubberBand(m, dimension: tileSize, factor: 1.5)
+                // Follow the finger 1:1, clamped to one cell. With no neighbour
+                // that way, allow only a small give against the edge.
+                let limit = hasNeighbor ? tileSize : tileSize * 0.18
+                let pull = min(max(raw, -limit), limit)
+                if hasNeighbor {
+                    dragOffsets = [tile.id: offset(pull), viewModel.engine.grid[nr][nc].id: offset(-pull)]
                 } else {
-                    // Past the threshold: magnetise toward the target cell with a
-                    // little overshoot, so the swap feels actively pulled in.
-                    let base = rubberBand(threshold, dimension: tileSize, factor: 1.5)
-                    let p = min((m - threshold) / (tileSize - threshold), 1)
-                    let eased = p * p * (3 - 2 * p)
-                    pullMag = base + (tileSize * 1.06 - base) * eased
+                    dragOffsets = [tile.id: offset(pull)]
                 }
-                let pull: CGFloat = raw < 0 ? -pullMag : pullMag
-                dragOffsets = [tile.id: offset(pull), neighbor.id: offset(-pull)]
 
-                let past = m > threshold
+                let past = hasNeighbor && abs(pull) > tileSize * 0.5
                 if past != dragPastThreshold {
                     dragPastThreshold = past
                     if past { viewModel.swapThresholdHaptic() }
@@ -107,12 +86,15 @@ struct GameView: View {
                 let hasNeighbor = nr >= 0 && nr < viewModel.engine.rows && nc >= 0 && nc < viewModel.engine.cols
 
                 if hasNeighbor && abs(raw) > tileSize * 0.5 {
-                    withAnimation(.spring(duration: 0.3, bounce: 0.34)) {
+                    // Commit: the residual offset and the cell change animate
+                    // together, so the tile slides into place with no jump.
+                    withAnimation(.snappy(duration: 0.2)) {
                         dragOffsets = [:]
                         viewModel.beginDragSwap(tile, dRow: dRow, dCol: dCol)
                     }
                 } else {
-                    withAnimation(.spring(duration: 0.4, bounce: 0.45)) {
+                    // Cancel: spring back to rest.
+                    withAnimation(.bouncy(duration: 0.3)) {
                         dragOffsets = [:]
                     }
                 }

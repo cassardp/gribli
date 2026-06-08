@@ -12,15 +12,22 @@ struct TileView: View {
     @State private var shakeTrigger = false
 
     private var baseScale: CGFloat {
-        if tile.isMatched { return 1.4 }
         if isBombFlashed { return 1.15 }
         return isSelected ? 0.85 : 1
     }
 
     private var baseBrightness: Double {
-        if tile.isMatched { return 0.35 }
         if isBombFlashed { return 0.3 }
         return isSelected ? 0.12 : 0
+    }
+
+    // Two-phase match pop: a fast opaque bloom + flash, then a collapse that
+    // shrinks and fades out. Driven independently of the cascade's withAnimation
+    // so the bloom always reads before gravity removes the tile.
+    private struct PopValues {
+        var scale: CGFloat = 1
+        var brightness: Double = 0
+        var opacity: Double = 1
     }
 
     var body: some View {
@@ -63,7 +70,25 @@ struct TileView: View {
                 SpringKeyframe(0.93, duration: 0.10)
                 SpringKeyframe(1.0, duration: 0.22, spring: .bouncy)
             }
-            .opacity(tile.isMatched ? 0 : 1)
+            .keyframeAnimator(initialValue: PopValues(), trigger: tile.isMatched) { content, pop in
+                content
+                    .scaleEffect(pop.scale)
+                    .brightness(pop.brightness)
+                    .opacity(pop.opacity)
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    SpringKeyframe(1.35, duration: 0.10, spring: .snappy)
+                    CubicKeyframe(0.2, duration: 0.18)
+                }
+                KeyframeTrack(\.brightness) {
+                    CubicKeyframe(0.18, duration: 0.08)
+                    CubicKeyframe(0, duration: 0.20)
+                }
+                KeyframeTrack(\.opacity) {
+                    LinearKeyframe(1.0, duration: 0.10)
+                    LinearKeyframe(0.0, duration: 0.18)
+                }
+            }
             .onChange(of: isGameOver) {
                 if isGameOver {
                     Task {
