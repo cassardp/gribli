@@ -10,6 +10,7 @@ struct SplashView: View {
     let onPlay: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(PaletteStore.self) private var palette
 
     private var tileColors: [Color] {
@@ -29,26 +30,21 @@ struct SplashView: View {
     ]
 
     @State private var matchedPositions: Set<Int> = []
+    @State private var collapsedPositions: Set<Int> = []
+    @State private var hintedPositions: Set<Int> = []
     @State private var completed = false
-    @State private var exploding = false
     @State private var isSwapping = false
+
+    @State private var dragTileId: UUID?
+    @State private var raisedTileId: UUID?
+    @State private var dragOffsets: [UUID: CGFloat] = [:]
+    @State private var dragPastThreshold = false
 
     @State private var titleOffset: CGFloat = -40
     @State private var titleOpacity: Double = 0
     @State private var tilesOffset: CGFloat = 40
     @State private var tilesOpacity: Double = 0
     @State private var hintOpacity: Double = 0
-    @State private var hintPulsing = false
-
-    @State private var demoActive = false
-    @State private var userInteracted = false
-    @State private var demoSwapped = false
-    @State private var demoFingerX: CGFloat = 0
-    @State private var demoFingerOpacity: Double = 0
-    @State private var cachedTileSize: CGFloat = 0
-    @State private var cachedLeadingPad: CGFloat = 0
-
-    @State private var explosionOffsets: [UUID: (x: CGFloat, y: CGFloat, rotation: Double)] = [:]
 
     private var bgColor: Color { Palette.background(for: colorScheme) }
     private var textColor: Color { Palette.text(for: colorScheme) }
@@ -63,12 +59,8 @@ struct SplashView: View {
 
             splashTiles
 
-            Text("Swipe")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(textColor.opacity(0.6))
+            instructionView
                 .opacity(hintOpacity)
-                .scaleEffect(hintPulsing ? 1.08 : 1.0)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: hintPulsing)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(bgColor.ignoresSafeArea())
@@ -84,13 +76,37 @@ struct SplashView: View {
             withAnimation(.easeIn(duration: 0.6).delay(0.8)) {
                 hintOpacity = 1.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                hintPulsing = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                startDemoLoop()
+            scheduleHint(after: 1.4)
+        }
+    }
+
+    // MARK: - Instruction
+
+    private var instructionView: some View {
+        ZStack {
+            if completed {
+                Text("You got it!")
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                HStack(spacing: 10) {
+                    Text("Swipe")
+                    Circle()
+                        .fill(tileColors[4])
+                        .frame(width: 20, height: 20)
+                    Text("right")
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
             }
         }
+        .font(.system(size: 17, weight: .medium, design: .rounded))
+        .foregroundStyle(textColor.opacity(0.6))
+        .frame(height: 28)
+        .clipped()
     }
 
     // MARK: - Tiles
@@ -103,53 +119,128 @@ struct SplashView: View {
             let leadingPad = (geo.size.width - tilesWidth) / 2
 
             ZStack {
-                Color.clear.onAppear {
-                    cachedTileSize = tileSize
-                    cachedLeadingPad = leadingPad
-                }
-
                 ForEach(tiles) { tile in
-                    let isMatched = matchedPositions.contains(tile.position)
-                    let offsets = explosionOffsets[tile.id] ?? (x: 0.0, y: 0.0, rotation: 0.0)
-
-                    Circle()
-                        .fill(tileColors[tile.colorIndex])
-                        .padding(4)
-                        .frame(width: tileSize, height: tileSize)
-                        .scaleEffect(isMatched && !exploding ? 1.05 : 1.0)
-                        .brightness(isMatched && !exploding ? 0.12 : 0)
-                        .offset(x: exploding ? offsets.x : 0, y: exploding ? offsets.y : 0)
-                        .rotationEffect(.degrees(exploding ? offsets.rotation : 0))
-                        .scaleEffect(exploding ? 0.4 : 1.0)
-                        .opacity(exploding ? 0 : 1)
-                        .position(
-                            x: leadingPad + CGFloat(tile.position) * tileSize + tileSize / 2,
-                            y: geo.size.height / 2
-                        )
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onEnded { value in
-                                    cancelDemo()
-                                    let dx = value.translation.width
-                                    let dy = value.translation.height
-                                    guard abs(dx) >= 15, abs(dx) > abs(dy),
-                                          !completed, !isSwapping else { return }
-                                    handleSwipe(tilePosition: tile.position, direction: dx > 0 ? 1 : -1)
-                                }
-                        )
+                    tileView(tile, tileSize: tileSize, leadingPad: leadingPad, centerY: geo.size.height / 2)
                 }
-
-                Circle()
-                    .fill(textColor.opacity(0.18))
-                    .frame(width: tileSize * 0.7, height: tileSize * 0.7)
-                    .position(x: demoFingerX, y: geo.size.height / 2 + tileSize * 0.3)
-                    .opacity(demoFingerOpacity)
             }
             .offset(y: tilesOffset)
             .opacity(tilesOpacity)
         }
         .frame(height: UIScreen.main.bounds.width / 8)
         .padding(.horizontal)
+    }
+
+    private func tileView(_ tile: SplashTile, tileSize: CGFloat, leadingPad: CGFloat, centerY: CGFloat) -> some View {
+        let isMatched = matchedPositions.contains(tile.position)
+        let isCollapsed = collapsedPositions.contains(tile.position)
+        let isHinted = hintedPositions.contains(tile.position)
+        let isDragging = dragTileId == tile.id
+        let posX = leadingPad + CGFloat(tile.position) * tileSize + tileSize / 2 + (dragOffsets[tile.id] ?? 0)
+
+        // Idle hint: same barely-there breathing pulse as the in-game hint.
+        // With reduce motion, a static 4% bump instead.
+        let hintAnimation: Animation = isHinted
+            ? (reduceMotion
+                ? .easeOut(duration: 0.2)
+                : .easeInOut(duration: 0.6).repeatForever(autoreverses: true))
+            : .easeOut(duration: 0.2)
+
+        return Circle()
+            .fill(tileColors[tile.colorIndex])
+            .padding(4)
+            .frame(width: tileSize, height: tileSize)
+            .scaleEffect(isHinted ? 1.04 : 1.0)
+            .animation(hintAnimation, value: isHinted)
+            .brightness(isMatched && !isCollapsed ? 0.12 : 0)
+            .scaleEffect(isCollapsed ? 0 : (isMatched ? 1.05 : 1.0))
+            .opacity(isCollapsed ? 0 : 1)
+            .scaleEffect(isDragging ? 1.07 : 1)
+            .shadow(color: .black.opacity(isDragging ? 0.22 : 0), radius: 7, y: 4)
+            .animation(.snappy(duration: 0.18), value: isDragging)
+            .position(x: posX, y: centerY)
+            .zIndex(zIndex(for: tile))
+            .gesture(tileDragGesture(tile, tileSize: tileSize))
+    }
+
+    // The grabbed tile rides above its swap partner for the whole exchange,
+    // drag and release slide included — zIndex is not animatable.
+    private func zIndex(for tile: SplashTile) -> Double {
+        if dragTileId == tile.id || raisedTileId == tile.id { return 2 }
+        return dragOffsets.keys.contains(tile.id) ? 1 : 0
+    }
+
+    // MARK: - Gesture
+
+    private func tileDragGesture(_ tile: SplashTile, tileSize: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard !completed, !isSwapping else { return }
+                let t = value.translation
+
+                if dragTileId == nil {
+                    guard abs(t.width) >= 4, abs(t.width) > abs(t.height) else { return }
+                    dragTileId = tile.id
+                    hintedPositions = []
+                }
+                guard dragTileId == tile.id else { return }
+
+                let raw = t.width
+                let dir = raw >= 0 ? 1 : -1
+                let neighborPos = tile.position + dir
+                let hasNeighbor = neighborPos >= 0 && neighborPos < 6
+
+                // Same feel as the game grid: follow the finger 1:1 up to just
+                // past the commit threshold, then rubber-band so the release
+                // always has a visible spring left to play. Against an edge,
+                // allow only a small give.
+                let pull: CGFloat
+                if hasNeighbor {
+                    let soft = tileSize * 0.55
+                    let k = tileSize * 0.2
+                    let mag = abs(raw)
+                    let eased = mag <= soft ? mag : soft + k * (1 - exp(-(mag - soft) / k))
+                    pull = eased * (raw >= 0 ? 1 : -1)
+                } else {
+                    let limit = tileSize * 0.18
+                    pull = min(max(raw, -limit), limit)
+                }
+                if hasNeighbor, let neighbor = tiles.first(where: { $0.position == neighborPos }) {
+                    dragOffsets = [tile.id: pull, neighbor.id: -pull]
+                } else {
+                    dragOffsets = [tile.id: pull]
+                }
+
+                let past = hasNeighbor && abs(pull) > tileSize * 0.5
+                if past != dragPastThreshold {
+                    dragPastThreshold = past
+                    if past { lightHaptic() }
+                }
+            }
+            .onEnded { value in
+                let wasLocked = dragTileId == tile.id
+                dragTileId = nil
+                dragPastThreshold = false
+                guard wasLocked, !completed, !isSwapping else {
+                    withAnimation(.bouncy(duration: 0.25)) { dragOffsets = [:] }
+                    return
+                }
+
+                let raw = value.translation.width
+                let dir = raw >= 0 ? 1 : -1
+                let neighborPos = tile.position + dir
+                let hasNeighbor = neighborPos >= 0 && neighborPos < 6
+
+                // A fast flick commits even under half a tile of travel.
+                let predicted = value.predictedEndTranslation.width
+                let flick = predicted * raw > 0 && abs(predicted) > tileSize * 0.9 && abs(raw) > tileSize * 0.2
+
+                if hasNeighbor && (abs(raw) > tileSize * 0.5 || flick) {
+                    raisedTileId = tile.id
+                    commitSwap(tile.position, neighborPos)
+                } else {
+                    withAnimation(.bouncy(duration: 0.25)) { dragOffsets = [:] }
+                }
+            }
     }
 
     // MARK: - Swap & Match
@@ -176,132 +267,93 @@ struct SplashView: View {
         return matched
     }
 
-    private func handleSwipe(tilePosition: Int, direction: Int) {
-        let neighborPos = tilePosition + direction
-        guard neighborPos >= 0, neighborPos < 6 else { return }
-
+    private func commitSwap(_ posA: Int, _ posB: Int) {
         isSwapping = true
-        lightHaptic()
-
-        withAnimation(.spring(duration: 0.25)) {
-            swapPositions(tilePosition, neighborPos)
+        withAnimation(.spring(duration: 0.24, bounce: 0.25)) {
+            dragOffsets = [:]
+            swapPositions(posA, posB)
         }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(160))
             let matches = findMatch()
             if matches.isEmpty {
-                withAnimation(.spring(duration: 0.25)) {
-                    swapPositions(tilePosition, neighborPos)
+                // No match: bouncy back-and-forth refusal with a firm clack,
+                // same as the game grid.
+                rigidHaptic()
+                withAnimation(.spring(duration: 0.34, bounce: 0.5)) {
+                    swapPositions(posA, posB)
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    isSwapping = false
-                }
+                try? await Task.sleep(for: .milliseconds(300))
+                raisedTileId = nil
+                isSwapping = false
+                scheduleHint(after: 1.5)
             } else {
                 mediumHaptic()
-                withAnimation(.spring(duration: 0.2)) {
+                raisedTileId = nil
+                hintedPositions = []
+                withAnimation(.spring(duration: 0.3)) {
+                    completed = true
                     matchedPositions = matches
                 }
-                completed = true
-                completeSplash()
+                await celebrate(from: (CGFloat(posA) + CGFloat(posB)) / 2)
             }
         }
     }
 
-    // MARK: - Demo
+    // MARK: - Hint
 
-    private func startDemoLoop() {
-        guard !userInteracted, !completed else { return }
-        demoActive = true
-
-        let tileSize = cachedTileSize
-        let leading = cachedLeadingPad
-        guard tileSize > 0 else { return }
-
-        let startX = leading + 2 * tileSize + tileSize / 2
-        let endX = leading + 3 * tileSize + tileSize / 2
-        demoFingerX = startX
-
-        withAnimation(.easeOut(duration: 0.25)) {
-            demoFingerOpacity = 1.0
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            guard demoActive else { return }
-            withAnimation(.easeInOut(duration: 0.5)) {
-                demoFingerX = endX
-            }
-            withAnimation(.spring(duration: 0.3)) {
-                swapPositions(2, 3)
-                demoSwapped = true
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            guard demoActive else { return }
-            withAnimation(.easeOut(duration: 0.2)) {
-                demoFingerOpacity = 0
-            }
-            withAnimation(.spring(duration: 0.3)) {
-                swapPositions(2, 3)
-                demoSwapped = false
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-            guard demoActive else { return }
-            startDemoLoop()
-        }
-    }
-
-    private func cancelDemo() {
-        guard !userInteracted else { return }
-        userInteracted = true
-        demoActive = false
-        demoFingerOpacity = 0
-        matchedPositions = []
-        if demoSwapped {
-            swapPositions(2, 3)
-            demoSwapped = false
+    private func scheduleHint(after seconds: Double) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(Int(seconds * 1000)))
+            guard !completed, !isSwapping, dragTileId == nil else { return }
+            hintedPositions = [2, 3]
         }
     }
 
     // MARK: - Completion
 
-    private func completeSplash() {
-        generateExplosionOffsets()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation(.easeOut(duration: 0.15)) {
-                hintOpacity = 0
-            }
-            withAnimation(.spring(duration: 0.6, bounce: 0.2)) {
-                exploding = true
-            }
-            withAnimation(.easeOut(duration: 0.5).delay(0.2)) {
-                titleOpacity = 0
-                titleOffset = -20
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                onPlay()
-            }
-        }
-    }
-
-    private func generateExplosionOffsets() {
-        let center: CGFloat = 2.5
+    // Sober collapse: each tile shrinks away with a fade, staggered outward
+    // from the swap point — same vocabulary as the in-game match pop.
+    private func celebrate(from center: CGFloat) async {
+        try? await Task.sleep(for: .milliseconds(280))
         for tile in tiles {
-            let spread = CGFloat(tile.position) - center
-            let x = spread * CGFloat.random(in: 60...100) + CGFloat.random(in: -30...30)
-            let y = CGFloat.random(in: -300 ... -150)
-            let rotation = Double(spread) * Double.random(in: 15...35)
-            explosionOffsets[tile.id] = (x, y, rotation)
+            let distance = abs(CGFloat(tile.position) - center)
+            let delay = reduceMotion ? 0 : Double(distance) * 0.06
+            withAnimation(.easeIn(duration: 0.22).delay(delay)) {
+                _ = collapsedPositions.insert(tile.position)
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(650))
+        dismiss()
+    }
+
+    private func dismiss() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            hintOpacity = 0
+        }
+        withAnimation(.easeOut(duration: 0.4)) {
+            titleOpacity = 0
+            titleOffset = -20
+            tilesOpacity = 0
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            onPlay()
         }
     }
 
+    // MARK: - Haptics
+
+    private var hapticsEnabled: Bool {
+        UserDefaults.standard.object(forKey: "hapticsEnabled") as? Bool ?? true
+    }
     private func lightHaptic() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.5)
+        if hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.6) }
     }
     private func mediumHaptic() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.8)
+        if hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.8) }
+    }
+    private func rigidHaptic() {
+        if hapticsEnabled { UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.8) }
     }
 }
