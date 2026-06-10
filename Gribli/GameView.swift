@@ -38,15 +38,33 @@ struct GameView: View {
                 let t = value.translation
 
                 // Lock onto one axis as soon as the finger direction is
-                // readable. A low threshold keeps the tile glued to the finger
-                // from the first points — no perceptible dead zone.
+                // readable. The travel threshold stays low (no perceptible
+                // dead zone) but one axis must clearly dominate the other:
+                // the first points of a touch are noisy — the finger pad
+                // rolls on contact — so a near-diagonal start waits for a
+                // few more points instead of guessing.
                 if dragTileId == nil {
-                    guard max(abs(t.width), abs(t.height)) >= 4 else { return }
+                    let w = abs(t.width), h = abs(t.height)
+                    guard max(w, h) >= 4, max(w, h) > min(w, h) * 1.4 else { return }
                     dragTileId = tile.id
-                    dragAxis = abs(t.width) > abs(t.height) ? .horizontal : .vertical
+                    dragAxis = w > h ? .horizontal : .vertical
                     viewModel.cancelHint()
                 }
-                guard dragTileId == tile.id, let axis = dragAxis else { return }
+                guard dragTileId == tile.id, var axis = dragAxis else { return }
+
+                // The first lock can still guess wrong on a sloppy start.
+                // Until the drag crosses the commit threshold, a clearly
+                // dominant perpendicular translation re-locks the other
+                // axis — the chase spring absorbs the visual hand-off.
+                if !dragPastThreshold {
+                    let w = abs(t.width), h = abs(t.height)
+                    if axis == .horizontal && h > w * 1.4 {
+                        axis = .vertical
+                    } else if axis == .vertical && w > h * 1.4 {
+                        axis = .horizontal
+                    }
+                    dragAxis = axis
+                }
 
                 let raw = axis == .horizontal ? t.width : t.height
                 let dir = raw >= 0 ? 1 : -1
@@ -62,10 +80,16 @@ struct GameView: View {
                 // that way, allow only a small give against the edge.
                 let limit = hasNeighbor ? tileSize : tileSize * 0.18
                 let pull = min(max(raw, -limit), limit)
-                if hasNeighbor {
-                    dragOffsets = [tile.id: offset(pull), viewModel.engine.grid[nr][nc].id: offset(-pull)]
-                } else {
-                    dragOffsets = [tile.id: offset(pull)]
+                // The offsets chase the finger through a tight interactive
+                // spring instead of snapping to it: a slow drag still feels
+                // glued, but a fast flick can't teleport the tile — its
+                // visible speed is capped, so the exchange always reads.
+                withAnimation(.interactiveSpring(response: 0.18, dampingFraction: 1)) {
+                    if hasNeighbor {
+                        dragOffsets = [tile.id: offset(pull), viewModel.engine.grid[nr][nc].id: offset(-pull)]
+                    } else {
+                        dragOffsets = [tile.id: offset(pull)]
+                    }
                 }
 
                 let past = hasNeighbor && abs(pull) > tileSize * 0.5

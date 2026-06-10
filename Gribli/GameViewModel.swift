@@ -201,10 +201,11 @@ class GameViewModel {
         isAnimating = true
         selectedTile = nil
         engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
-        // No beat here: the exchange already played out under the finger
-        // (rubber-band + threshold tick), so any pause before the collapse
-        // reads as dead time. The pop overlaps the short residual slide.
-        Task { await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2, landDelay: 0) }
+        // Short beat before the collapse: with 1:1 tracking a fast flick can
+        // complete the exchange almost instantly, so without it the swap and
+        // the match pop blur into one unreadable frame. Shorter than the tap
+        // swap's beat — part of the slide already played under the finger.
+        Task { await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2, landDelay: 90) }
     }
 
     // Buffers a swipe issued while a cascade is still resolving. Last swipe

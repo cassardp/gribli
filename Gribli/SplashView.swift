@@ -193,10 +193,14 @@ struct SplashView: View {
                 // to one cell. Against an edge, allow only a small give.
                 let limit = hasNeighbor ? tileSize : tileSize * 0.18
                 let pull = min(max(raw, -limit), limit)
-                if hasNeighbor, let neighbor = tiles.first(where: { $0.position == neighborPos }) {
-                    dragOffsets = [tile.id: pull, neighbor.id: -pull]
-                } else {
-                    dragOffsets = [tile.id: pull]
+                // Chase the finger through a tight interactive spring so a
+                // fast flick can't teleport the tile — same cap as the grid.
+                withAnimation(.interactiveSpring(response: 0.18, dampingFraction: 1)) {
+                    if hasNeighbor, let neighbor = tiles.first(where: { $0.position == neighborPos }) {
+                        dragOffsets = [tile.id: pull, neighbor.id: -pull]
+                    } else {
+                        dragOffsets = [tile.id: pull]
+                    }
                 }
 
                 let past = hasNeighbor && abs(pull) > tileSize * 0.5
