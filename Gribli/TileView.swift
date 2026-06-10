@@ -4,6 +4,7 @@ struct TileView: View {
     let tile: Tile
     let color: Color
     let isSelected: Bool
+    let isHinted: Bool
     let isBombFlashed: Bool
     let isPaused: Bool
     let isGameOver: Bool
@@ -36,7 +37,8 @@ struct TileView: View {
 
     private var baseScale: CGFloat {
         if isBombFlashed { return 1.18 }
-        return isSelected ? 0.88 : 1
+        if isSelected { return 0.88 }
+        return isHinted ? 1.04 : 1
     }
 
     var body: some View {
@@ -60,6 +62,16 @@ struct TileView: View {
                         : .easeInOut(duration: 0.55).repeatForever(autoreverses: true))
                     : .spring(duration: 0.25, bounce: 0.4),
                 value: isSelected
+            )
+            // Idle hint: a barely-there breathing pulse on the two tiles of a
+            // valid swap. With reduce motion, a static 4% bump instead.
+            .animation(
+                isHinted
+                    ? (reduceMotion
+                        ? .easeOut(duration: 0.2)
+                        : .easeInOut(duration: 0.6).repeatForever(autoreverses: true))
+                    : .easeOut(duration: 0.2),
+                value: isHinted
             )
             .keyframeAnimator(initialValue: LandingValues(), trigger: tile.row) { content, v in
                 content.scaleEffect(x: v.sx, y: v.sy, anchor: .bottom)

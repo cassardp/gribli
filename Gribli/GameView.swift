@@ -12,6 +12,7 @@ struct GameView: View {
     @State private var dragAxis: Axis?
     @State private var dragOffsets: [UUID: CGSize] = [:]
     @State private var dragPastThreshold = false
+    @State private var raisedTileId: UUID?
     @Environment(\.colorScheme) private var colorScheme
     @Environment(PaletteStore.self) private var palette
     private var bgColor: Color { Palette.background(for: colorScheme) }
@@ -20,6 +21,14 @@ struct GameView: View {
 
     init() {
         _viewModel = State(initialValue: GameViewModel())
+    }
+
+    // The grabbed tile rides above its swap partner for the whole exchange —
+    // during the drag (dragTileId) and through the release slide (raisedTileId).
+    private func zIndex(for tile: Tile) -> Double {
+        if tile.isMatched { return 3 }
+        if dragTileId == tile.id || raisedTileId == tile.id { return 2 }
+        return dragOffsets.keys.contains(tile.id) ? 1 : 0
     }
 
     private func tileDragGesture(_ tile: Tile, tileSize: CGFloat) -> some Gesture {
@@ -35,6 +44,7 @@ struct GameView: View {
                     guard max(abs(t.width), abs(t.height)) >= 4 else { return }
                     dragTileId = tile.id
                     dragAxis = abs(t.width) > abs(t.height) ? .horizontal : .vertical
+                    viewModel.cancelHint()
                 }
                 guard dragTileId == tile.id, let axis = dragAxis else { return }
 
@@ -77,17 +87,51 @@ struct GameView: View {
             }
             .onEnded { value in
                 let wasLocked = dragTileId == tile.id && dragAxis != nil
-                let axis = dragAxis
+                let lockedAxis = dragAxis
                 dragTileId = nil
                 dragAxis = nil
                 dragPastThreshold = false
                 let t = value.translation
 
+                if wasLocked {
+                    // Keep the released tile above its neighbours until the
+                    // commit/cancel slide finishes — zIndex is not animatable
+                    // and would otherwise drop the tile under them mid-flight.
+                    raisedTileId = tile.id
+                    let id = tile.id
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(320))
+                        if raisedTileId == id { raisedTileId = nil }
+                    }
+                }
+
+                // Board busy resolving a cascade: buffer the swipe and replay
+                // it the moment the board settles, so fast play never hits a
+                // dead zone. The drag usually never locked (onChanged bails
+                // while animating), so fall back to the dominant axis.
+                if viewModel.isAnimating, !viewModel.isGameOver, !viewModel.isPaused {
+                    withAnimation(.bouncy(duration: 0.25)) {
+                        dragOffsets = [:]
+                    }
+                    let axis = lockedAxis ?? (abs(t.width) > abs(t.height) ? .horizontal : .vertical)
+                    let raw = axis == .horizontal ? t.width : t.height
+                    let predicted = axis == .horizontal ? value.predictedEndTranslation.width : value.predictedEndTranslation.height
+                    let flick = predicted * raw > 0 && abs(predicted) > tileSize * 0.9 && abs(raw) >= 8
+                    guard abs(raw) >= tileSize * 0.35 || flick else { return }
+                    let sign = raw >= 0 ? 1 : -1
+                    viewModel.queueSwap(
+                        tileId: tile.id,
+                        dRow: axis == .vertical ? sign : 0,
+                        dCol: axis == .horizontal ? sign : 0
+                    )
+                    return
+                }
+
                 // A sloppy tap can travel a few points and lock the axis; keep
                 // treating anything under 8pt as a tap, springing the small
                 // residual offset back.
                 let travel = max(abs(t.width), abs(t.height))
-                guard wasLocked, let axis, travel >= 8 else {
+                guard wasLocked, let axis = lockedAxis, travel >= 8 else {
                     withAnimation(.bouncy(duration: 0.25)) {
                         dragOffsets = [:]
                     }
@@ -104,7 +148,13 @@ struct GameView: View {
                 let nr = tile.row + dRow, nc = tile.col + dCol
                 let hasNeighbor = nr >= 0 && nr < viewModel.engine.rows && nc >= 0 && nc < viewModel.engine.cols
 
-                if hasNeighbor && abs(raw) > tileSize * 0.5 {
+                // A fast flick should commit even if the finger travelled less
+                // than half a tile: project the gesture to its natural end
+                // point, requiring matching direction and some real travel.
+                let predicted = axis == .horizontal ? value.predictedEndTranslation.width : value.predictedEndTranslation.height
+                let flick = predicted * raw > 0 && abs(predicted) > tileSize * 0.9 && abs(raw) > tileSize * 0.2
+
+                if hasNeighbor && (abs(raw) > tileSize * 0.5 || flick) {
                     // Commit: the residual offset and the cell change animate
                     // together, so the tile slides into place with no jump.
                     // The rubber-band guarantees a real distance to cover here.
@@ -163,6 +213,7 @@ struct GameView: View {
                             tile: tile,
                             color: palette.color(for: tile.type),
                             isSelected: viewModel.selectedTile?.id == tile.id,
+                            isHinted: viewModel.hintTileIds.contains(tile.id),
                             isBombFlashed: viewModel.bombFlashTiles.contains(tile.id),
                             isPaused: viewModel.isPaused,
                             isGameOver: viewModel.isGameOver,
@@ -175,7 +226,7 @@ struct GameView: View {
                             x: CGFloat(tile.col) * tileSize + extra.width,
                             y: CGFloat(tile.row) * tileSize + extra.height
                         )
-                        .zIndex(tile.isMatched ? 2 : (dragOffsets.keys.contains(tile.id) ? 1 : 0))
+                        .zIndex(zIndex(for: tile))
                         .transition(.identity)
                         .gesture(tileDragGesture(tile, tileSize: tileSize))
                     }

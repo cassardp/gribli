@@ -51,10 +51,18 @@ class GameViewModel {
         didSet { UserDefaults.standard.set(playerLink, forKey: "playerLink") }
     }
     var scoreSubmitted = false
+    var hintTileIds: Set<UUID> = []
 
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     private let mediumHaptic = UIImpactFeedbackGenerator(style: .medium)
     private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
+    private let rigidHaptic = UIImpactFeedbackGenerator(style: .rigid)
+
+    // A swipe issued while the board is still resolving; replayed as soon as
+    // it settles. Keyed by tile id so it dies gracefully if the tile gets
+    // matched away or the board is shuffled in the meantime.
+    private var pendingSwap: (tileId: UUID, dRow: Int, dCol: Int)?
+    private var hintTask: Task<Void, Never>?
 
     private var timerStart: Date?
     private var timerBudget: Double = 30
@@ -69,10 +77,12 @@ class GameViewModel {
         lightHaptic.prepare()
         mediumHaptic.prepare()
         heavyHaptic.prepare()
+        rigidHaptic.prepare()
     }
 
     deinit {
         timerTask?.cancel()
+        hintTask?.cancel()
     }
 
     func setupGrid() {
@@ -85,6 +95,8 @@ class GameViewModel {
         hasStarted = false
         isPaused = false
         timerTask?.cancel()
+        pendingSwap = nil
+        cancelHint()
         matchRipples.removeAll()
         engine.buildGrid()
         timeRemaining = 30
@@ -107,6 +119,7 @@ class GameViewModel {
                 timeRemaining = max(0, timerBudget - elapsed)
                 if timeRemaining <= 0 {
                     isGameOver = true
+                    cancelHint()
                 }
             }
         }
@@ -114,6 +127,29 @@ class GameViewModel {
 
     func togglePause() {
         isPaused.toggle()
+        if isPaused { cancelHint() } else { scheduleHint() }
+    }
+
+    // MARK: - Idle hint
+
+    // After a few seconds without interaction, the two tiles of a valid swap
+    // pulse gently. Any touch, swap, or cascade re-arms the timer.
+    private func scheduleHint() {
+        hintTask?.cancel()
+        if !hintTileIds.isEmpty { hintTileIds = [] }
+        guard hasStarted, !isGameOver, !isPaused else { return }
+        hintTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, !isAnimating, !isGameOver, !isPaused else { return }
+            if let (r1, c1, r2, c2) = engine.findHint() {
+                hintTileIds = [engine.grid[r1][c1].id, engine.grid[r2][c2].id]
+            }
+        }
+    }
+
+    func cancelHint() {
+        hintTask?.cancel()
+        if !hintTileIds.isEmpty { hintTileIds = [] }
     }
 
     // Light tick when the drag crosses the commit threshold, so the swap feels
@@ -162,11 +198,13 @@ class GameViewModel {
     func startGame() {
         hasStarted = true
         startTimer()
+        scheduleHint()
     }
 
     func tileTapped(_ tile: Tile) {
         guard !isAnimating, !isGameOver, !isPaused else { return }
         if !hasStarted { startGame() }
+        scheduleHint()
         if let selected = selectedTile {
             if selected.id == tile.id {
                 selectedTile = nil
@@ -187,13 +225,35 @@ class GameViewModel {
     func beginDragSwap(_ tile: Tile, dRow: Int, dCol: Int) {
         guard !isAnimating, !isGameOver, !isPaused else { return }
         if !hasStarted { startGame() }
+        cancelHint()
         let r1 = tile.row, c1 = tile.col
         let r2 = r1 + dRow, c2 = c1 + dCol
         guard r2 >= 0, r2 < engine.rows, c2 >= 0, c2 < engine.cols else { return }
         isAnimating = true
         selectedTile = nil
         engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
-        Task { await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2) }
+        // Short beat: the rubber-band already carried the tile most of the
+        // way, so the swap reads as landed well before the spring settles.
+        Task { await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2, landDelay: 90) }
+    }
+
+    // Buffers a swipe issued while a cascade is still resolving. Last swipe
+    // wins; a light tick acknowledges that the input registered.
+    func queueSwap(tileId: UUID, dRow: Int, dCol: Int) {
+        guard isAnimating, !isGameOver, !isPaused else { return }
+        pendingSwap = (tileId, dRow, dCol)
+        if hapticsEnabled { lightHaptic.impactOccurred(intensity: 0.35) }
+    }
+
+    private func flushPendingSwap() {
+        guard let pending = pendingSwap else { return }
+        pendingSwap = nil
+        guard !isGameOver, !isPaused else { return }
+        guard let tile = engine.allTiles.first(where: { $0.id == pending.tileId }) else { return }
+        let r2 = tile.row + pending.dRow, c2 = tile.col + pending.dCol
+        guard r2 >= 0, r2 < engine.rows, c2 >= 0, c2 < engine.cols else { return }
+        let neighbor = engine.grid[r2][c2]
+        Task { await trySwap(tile, neighbor) }
     }
 
     // MARK: - Swap
@@ -209,20 +269,26 @@ class GameViewModel {
         await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2)
     }
 
-    private func resolveSwap(r1: Int, c1: Int, r2: Int, c2: Int) async {
+    private func resolveSwap(r1: Int, c1: Int, r2: Int, c2: Int, landDelay: Int = 140) async {
         if engine.findMatches().isEmpty {
             // No match: let the swap land fully, then revert with a clear
             // bouncy back-and-forth so the failed move reads as a refusal.
+            // A single firm clack makes the "no" readable under the finger,
+            // distinct from the light commit tick.
             try? await Task.sleep(for: .milliseconds(160))
+            if hapticsEnabled { rigidHaptic.impactOccurred(intensity: 0.8) }
             withAnimation(.spring(duration: 0.34, bounce: 0.5)) {
                 engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
             }
             try? await Task.sleep(for: .milliseconds(300))
             isAnimating = false
+            flushPendingSwap()
+            scheduleHint()
         } else {
-            // Match: let the committed swap land (~0.24s spring) before the
-            // collapse fires, so the exchange and the match read as two beats.
-            try? await Task.sleep(for: .milliseconds(170))
+            // Match: let the committed swap land before the collapse fires,
+            // so the exchange and the match read as two beats. Drag swaps
+            // pass a shorter beat than tap swaps (less distance left).
+            try? await Task.sleep(for: .milliseconds(landDelay))
             await processCascade()
         }
     }
@@ -309,6 +375,8 @@ class GameViewModel {
             withAnimation { engine.buildGrid() }
         }
         isAnimating = false
+        flushPendingSwap()
+        scheduleHint()
     }
 
     func submitScore() async {
