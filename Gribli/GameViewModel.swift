@@ -232,9 +232,10 @@ class GameViewModel {
         isAnimating = true
         selectedTile = nil
         engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
-        // Short beat: the rubber-band already carried the tile most of the
-        // way, so the swap reads as landed well before the spring settles.
-        Task { await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2, landDelay: 90) }
+        // No beat here: the exchange already played out under the finger
+        // (rubber-band + threshold tick), so any pause before the collapse
+        // reads as dead time. The pop overlaps the short residual slide.
+        Task { await resolveSwap(r1: r1, c1: c1, r2: r2, c2: c2, landDelay: 0) }
     }
 
     // Buffers a swipe issued while a cascade is still resolving. Last swipe

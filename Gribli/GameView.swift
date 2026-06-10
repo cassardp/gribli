@@ -61,14 +61,19 @@ struct GameView: View {
                 // Follow the finger 1:1 up to just past the commit threshold,
                 // then rubber-band: the swap never completes under the finger,
                 // so the release always has a visible spring left to play —
-                // even on a fast flick. With no neighbour that way, allow only
-                // a small give against the edge.
+                // even on a fast flick. The over-threshold zone decays
+                // exponentially with its slope starting at 1, so the hand-off
+                // from 1:1 tracking is seamless and the ~0.75-tile ceiling is
+                // approached asymptotically — no kink, no hard stop, which a
+                // slow drag would otherwise feel as a snag. With no neighbour
+                // that way, allow only a small give against the edge.
                 let pull: CGFloat
                 if hasNeighbor {
                     let soft = tileSize * 0.55
+                    let k = tileSize * 0.2
                     let mag = abs(raw)
-                    let eased = mag <= soft ? mag : soft + (mag - soft) * 0.25
-                    pull = min(eased, tileSize * 0.75) * (raw >= 0 ? 1 : -1)
+                    let eased = mag <= soft ? mag : soft + k * (1 - exp(-(mag - soft) / k))
+                    pull = eased * (raw >= 0 ? 1 : -1)
                 } else {
                     let limit = tileSize * 0.18
                     pull = min(max(raw, -limit), limit)
