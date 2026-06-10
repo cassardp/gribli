@@ -33,6 +33,7 @@ struct LeaderboardView: View {
     private var bgColor: Color { Palette.background(for: colorScheme) }
     private var textColor: Color { Palette.text(for: colorScheme) }
     private var bestScore: Int { UserDefaults.standard.integer(forKey: "bestScore") }
+    private var gribliAppStoreURL: URL { URL(string: "https://apps.apple.com/us/app/gribli/id6759824235")! }
 
     init(playerName: Binding<String>, playerLink: Binding<String>, startTab: Int = 0, highlightPlayerName: String? = nil, onSave: (() async -> Void)? = nil) {
         _playerName = playerName
@@ -275,6 +276,13 @@ struct LeaderboardView: View {
                     .padding(.top, 36)
                     .padding(.bottom, 24)
 
+                Text("Theme")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(textColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+
                 HStack(spacing: 8) {
                     ForEach(PaletteStore.AppearanceMode.allCases, id: \.self) { mode in
                         Button {
@@ -392,36 +400,58 @@ struct LeaderboardView: View {
                         .padding(.top, 12)
                         .padding(.bottom, -8)
 
-                    Text("Swap tiles, chain combos, trigger bombs. Add a link to your profile to get noticed on the monthly leaderboard.")
+                    Text(aboutText)
                         .font(.body)
                         .foregroundStyle(textColor.opacity(0.8))
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .frame(maxWidth: .infinity)
 
+                    VStack(spacing: 14) {
+                        Text("The best way to support Gribli")
+                            .font(.body)
+                            .foregroundStyle(textColor.opacity(0.8))
+                            .multilineTextAlignment(.center)
+
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(textColor.opacity(0.35))
+
+                        ShareLink(
+                            item: gribliAppStoreURL,
+                            subject: Text("Gribli"),
+                            message: Text("Share Gribli if you enjoyed it.")
+                        ) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 16, weight: .semibold))
+
+                                Text("Share Gribli")
+                                    .font(.title3.weight(.medium))
+                            }
+                            .foregroundStyle(textColor)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 13)
+                            .background(textColor.opacity(0.06), in: Capsule())
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+
                     Spacer()
 
                     VStack(spacing: 10) {
-                        Text("My Other Apps")
+                        Text("Try My Other Apps")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(textColor.opacity(0.35))
                             .textCase(.uppercase)
 
                         HStack(spacing: 8) {
-                            infoLink(label: "Capelo", url: "https://apps.apple.com/fr/app/capelo/id6760834408")
                             infoLink(label: "Keblo", url: "https://apps.apple.com/app/keblo/id6760995344")
+                            infoLink(label: "Capelo", url: "https://apps.apple.com/fr/app/capelo/id6760834408")
                             infoLink(label: "Pinpin", url: "https://apps.apple.com/fr/app/pinpin-mobile/id6748907154")
                         }
-                    }
 
-                    Link(destination: URL(string: "https://x.com/patricecassard")!) {
-                        HStack(spacing: 8) {
-                            Text("Follow me on X")
-                                .font(.subheadline.weight(.medium))
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption2.weight(.semibold))
-                        }
-                        .foregroundStyle(textColor.opacity(0.5))
+                        infoLink(label: "Icon Atelier", url: "https://apps.apple.com/fr/app/icon-atelier-app-icon-maker/id6767892414")
                     }
 
                     Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")")
@@ -433,6 +463,16 @@ struct LeaderboardView: View {
                 .frame(minHeight: geo.size.height)
             }
         }
+    }
+
+    private var aboutText: AttributedString {
+        var string = AttributedString("Gribli is an indie game, crafted with love by Patrice Cassard. One person, no big studio, no ads, no tricks.")
+        if let range = string.range(of: "Patrice Cassard") {
+            string[range].link = URL(string: "https://x.com/patricecassard")
+            string[range].underlineStyle = .single
+            string[range].foregroundColor = textColor.opacity(0.8)
+        }
+        return string
     }
 
     private func infoLink(label: String, url: String) -> some View {
