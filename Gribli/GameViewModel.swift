@@ -4,12 +4,6 @@ enum TileType: CaseIterable {
     case olive, red, orange, blue, silver, taupe
 }
 
-struct MatchRipple: Identifiable {
-    let id = UUID()
-    let row: Double
-    let col: Double
-}
-
 struct Tile: Identifiable, Equatable {
     let id: UUID
     var type: TileType
@@ -31,7 +25,6 @@ class GameViewModel {
         didSet { UserDefaults.standard.set(bestScore, forKey: "bestScore") }
     }
     var isNewBest = false
-    var matchRipples: [MatchRipple] = []
     var timeRemaining: Double = 30
     var isGameOver = false
     var hasStarted = false
@@ -97,7 +90,6 @@ class GameViewModel {
         timerTask?.cancel()
         pendingSwap = nil
         cancelHint()
-        matchRipples.removeAll()
         engine.buildGrid()
         timeRemaining = 30
     }
@@ -156,29 +148,6 @@ class GameViewModel {
     // magnetically "snapped" into place.
     func swapThresholdHaptic() {
         if hapticsEnabled { lightHaptic.impactOccurred(intensity: 0.6) }
-    }
-
-    private func matchCentroid(_ matches: Set<UUID>) -> (row: Double, col: Double)? {
-        var sumRow = 0.0, sumCol = 0.0, count = 0.0
-        for r in 0..<engine.rows {
-            for c in 0..<engine.cols where matches.contains(engine.grid[r][c].id) {
-                sumRow += Double(r)
-                sumCol += Double(c)
-                count += 1
-            }
-        }
-        guard count > 0 else { return nil }
-        return (sumRow / count, sumCol / count)
-    }
-
-    // Spawns a single expanding shockwave at the centroid of a matched group.
-    private func emitRipple(at center: (row: Double, col: Double)) {
-        let ripple = MatchRipple(row: center.row, col: center.col)
-        matchRipples.append(ripple)
-        Task {
-            try? await Task.sleep(for: .milliseconds(500))
-            matchRipples.removeAll { $0.id == ripple.id }
-        }
     }
 
     func addTime(matchCount: Int, chain: Int, hasBomb: Bool) {
@@ -324,9 +293,7 @@ class GameViewModel {
 
             // The bloom/collapse pop is driven by a keyframe animator in TileView,
             // keyed on `isMatched`, so this is just a plain state flip.
-            let center = matchCentroid(matches)
             engine.markMatched(matches)
-            if let center { emitRipple(at: center) }
             if hapticsEnabled {
                 let intensity = min(1.0, 0.5 + Double(chain) * 0.15)
                 if hasBomb {

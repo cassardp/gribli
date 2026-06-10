@@ -58,26 +58,10 @@ struct GameView: View {
                     axis == .horizontal ? CGSize(width: d, height: 0) : CGSize(width: 0, height: d)
                 }
 
-                // Follow the finger 1:1 up to just past the commit threshold,
-                // then rubber-band: the swap never completes under the finger,
-                // so the release always has a visible spring left to play —
-                // even on a fast flick. The over-threshold zone decays
-                // exponentially with its slope starting at 1, so the hand-off
-                // from 1:1 tracking is seamless and the ~0.75-tile ceiling is
-                // approached asymptotically — no kink, no hard stop, which a
-                // slow drag would otherwise feel as a snag. With no neighbour
+                // Follow the finger 1:1, clamped to one cell. With no neighbour
                 // that way, allow only a small give against the edge.
-                let pull: CGFloat
-                if hasNeighbor {
-                    let soft = tileSize * 0.55
-                    let k = tileSize * 0.2
-                    let mag = abs(raw)
-                    let eased = mag <= soft ? mag : soft + k * (1 - exp(-(mag - soft) / k))
-                    pull = eased * (raw >= 0 ? 1 : -1)
-                } else {
-                    let limit = tileSize * 0.18
-                    pull = min(max(raw, -limit), limit)
-                }
+                let limit = hasNeighbor ? tileSize : tileSize * 0.18
+                let pull = min(max(raw, -limit), limit)
                 if hasNeighbor {
                     dragOffsets = [tile.id: offset(pull), viewModel.engine.grid[nr][nc].id: offset(-pull)]
                 } else {
@@ -162,7 +146,6 @@ struct GameView: View {
                 if hasNeighbor && (abs(raw) > tileSize * 0.5 || flick) {
                     // Commit: the residual offset and the cell change animate
                     // together, so the tile slides into place with no jump.
-                    // The rubber-band guarantees a real distance to cover here.
                     withAnimation(.spring(duration: 0.24, bounce: 0.25)) {
                         dragOffsets = [:]
                         viewModel.beginDragSwap(tile, dRow: dRow, dCol: dCol)
@@ -235,18 +218,16 @@ struct GameView: View {
                         .transition(.identity)
                         .gesture(tileDragGesture(tile, tileSize: tileSize))
                     }
-                    ForEach(viewModel.matchRipples) { ripple in
-                        RippleView(size: tileSize, color: textColor)
-                            .offset(
-                                x: CGFloat(ripple.col) * tileSize,
-                                y: CGFloat(ripple.row) * tileSize
-                            )
-                            .allowsHitTesting(false)
-                    }
                 }
+                // The clip window extends one tile above the grid (so falling
+                // tiles slide in from just offscreen) and a margin below it,
+                // so bottom-row effects — bomb flash, drag lift shadow,
+                // game-over dip — overflow the frame instead of being cut.
                 .frame(width: geo.size.width, height: gridHeight, alignment: .topLeading)
                 .padding(.top, tileSize)
+                .padding(.bottom, tileSize * 0.35)
                 .clipped()
+                .padding(.bottom, -tileSize * 0.35)
                 .padding(.top, -tileSize)
                 .overlay {
                     if viewModel.showNoMoves {
@@ -432,24 +413,5 @@ struct GameView: View {
                 viewModel.togglePause()
             }
         }
-    }
-}
-
-// Single discreet halo at the centroid of a matched group: a thin ring that
-// expands and fades out.
-private struct RippleView: View {
-    let size: CGFloat
-    let color: Color
-    @State private var animate = false
-
-    var body: some View {
-        Circle()
-            .stroke(color.opacity(0.4), lineWidth: 1.5)
-            .frame(width: size, height: size)
-            .scaleEffect(animate ? 1.55 : 0.7)
-            .opacity(animate ? 0 : 0.45)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.4)) { animate = true }
-            }
     }
 }

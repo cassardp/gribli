@@ -189,21 +189,10 @@ struct SplashView: View {
                 let neighborPos = tile.position + dir
                 let hasNeighbor = neighborPos >= 0 && neighborPos < 6
 
-                // Same feel as the game grid: follow the finger 1:1 up to just
-                // past the commit threshold, then rubber-band so the release
-                // always has a visible spring left to play. Against an edge,
-                // allow only a small give.
-                let pull: CGFloat
-                if hasNeighbor {
-                    let soft = tileSize * 0.55
-                    let k = tileSize * 0.2
-                    let mag = abs(raw)
-                    let eased = mag <= soft ? mag : soft + k * (1 - exp(-(mag - soft) / k))
-                    pull = eased * (raw >= 0 ? 1 : -1)
-                } else {
-                    let limit = tileSize * 0.18
-                    pull = min(max(raw, -limit), limit)
-                }
+                // Same feel as the game grid: follow the finger 1:1, clamped
+                // to one cell. Against an edge, allow only a small give.
+                let limit = hasNeighbor ? tileSize : tileSize * 0.18
+                let pull = min(max(raw, -limit), limit)
                 if hasNeighbor, let neighbor = tiles.first(where: { $0.position == neighborPos }) {
                     dragOffsets = [tile.id: pull, neighbor.id: -pull]
                 } else {
