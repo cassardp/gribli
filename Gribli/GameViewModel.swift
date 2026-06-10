@@ -4,12 +4,6 @@ enum TileType: CaseIterable {
     case olive, red, orange, blue, silver, taupe
 }
 
-struct ScorePopup: Identifiable {
-    let id = UUID()
-    let text: String
-    var chain: Int = 1
-}
-
 struct MatchRipple: Identifiable {
     let id = UUID()
     let row: Double
@@ -37,7 +31,6 @@ class GameViewModel {
         didSet { UserDefaults.standard.set(bestScore, forKey: "bestScore") }
     }
     var isNewBest = false
-    var scorePopups: [ScorePopup] = []
     var matchRipples: [MatchRipple] = []
     var timeRemaining: Double = 30
     var isGameOver = false
@@ -92,7 +85,6 @@ class GameViewModel {
         hasStarted = false
         isPaused = false
         timerTask?.cancel()
-        scorePopups.removeAll()
         matchRipples.removeAll()
         engine.buildGrid()
         timeRemaining = 30
@@ -130,8 +122,7 @@ class GameViewModel {
         if hapticsEnabled { lightHaptic.impactOccurred(intensity: 0.6) }
     }
 
-    // Spawns a single expanding halo at the centroid of a matched group.
-    private func emitRipple(for matches: Set<UUID>) {
+    private func matchCentroid(_ matches: Set<UUID>) -> (row: Double, col: Double)? {
         var sumRow = 0.0, sumCol = 0.0, count = 0.0
         for r in 0..<engine.rows {
             for c in 0..<engine.cols where matches.contains(engine.grid[r][c].id) {
@@ -140,24 +131,17 @@ class GameViewModel {
                 count += 1
             }
         }
-        guard count > 0 else { return }
-        let ripple = MatchRipple(row: sumRow / count, col: sumCol / count)
+        guard count > 0 else { return nil }
+        return (sumRow / count, sumCol / count)
+    }
+
+    // Spawns a single expanding shockwave at the centroid of a matched group.
+    private func emitRipple(at center: (row: Double, col: Double)) {
+        let ripple = MatchRipple(row: center.row, col: center.col)
         matchRipples.append(ripple)
         Task {
             try? await Task.sleep(for: .milliseconds(500))
             matchRipples.removeAll { $0.id == ripple.id }
-        }
-    }
-
-    private func showPopup(_ text: String, chain: Int = 1) {
-        let popup = ScorePopup(text: text, chain: chain)
-        withAnimation(.spring(duration: 0.3)) {
-            scorePopups.append(popup)
-        }
-        let popupId = popup.id
-        Task {
-            try? await Task.sleep(for: .milliseconds(900))
-            withAnimation { scorePopups.removeAll { $0.id == popupId } }
         }
     }
 
@@ -218,7 +202,7 @@ class GameViewModel {
         isAnimating = true
         let r1 = a.row, c1 = a.col, r2 = b.row, c2 = b.col
 
-        withAnimation(.spring(duration: 0.28, bounce: 0.3)) {
+        withAnimation(.spring(duration: 0.25, bounce: 0.35)) {
             engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
         }
         selectedTile = nil
@@ -228,17 +212,17 @@ class GameViewModel {
     private func resolveSwap(r1: Int, c1: Int, r2: Int, c2: Int) async {
         if engine.findMatches().isEmpty {
             // No match: let the swap land fully, then revert with a clear
-            // back-and-forth so the failed move reads.
-            try? await Task.sleep(for: .milliseconds(180))
-            withAnimation(.spring(duration: 0.36, bounce: 0.45)) {
+            // bouncy back-and-forth so the failed move reads as a refusal.
+            try? await Task.sleep(for: .milliseconds(160))
+            withAnimation(.spring(duration: 0.34, bounce: 0.5)) {
                 engine.swap(r1: r1, c1: c1, r2: r2, c2: c2)
             }
             try? await Task.sleep(for: .milliseconds(300))
             isAnimating = false
         } else {
-            // Match: just a brief beat so the swap reads, then pop immediately —
-            // no dead time between the swipe landing and the match firing.
-            try? await Task.sleep(for: .milliseconds(120))
+            // Match: let the committed swap land (~0.24s spring) before the
+            // collapse fires, so the exchange and the match read as two beats.
+            try? await Task.sleep(for: .milliseconds(170))
             await processCascade()
         }
     }
@@ -273,8 +257,9 @@ class GameViewModel {
 
             // The bloom/collapse pop is driven by a keyframe animator in TileView,
             // keyed on `isMatched`, so this is just a plain state flip.
+            let center = matchCentroid(matches)
             engine.markMatched(matches)
-            emitRipple(for: matches)
+            if let center { emitRipple(at: center) }
             if hapticsEnabled {
                 let intensity = min(1.0, 0.5 + Double(chain) * 0.15)
                 if hasBomb {
@@ -298,22 +283,23 @@ class GameViewModel {
                 isNewBest = true
             }
             addTime(matchCount: rawMatches.count, chain: chain, hasBomb: hasBomb)
-            showPopup("+\(points)", chain: chain)
             chain += 1
 
-            // Let the two-phase pop (~0.28s) complete before gravity yanks the
-            // matched tiles out — otherwise the bloom gets cut mid-animation.
-            try? await Task.sleep(for: .milliseconds(280))
+            // Let the collapse (~0.2s) complete before gravity yanks the
+            // matched tiles out — otherwise it gets cut mid-animation.
+            try? await Task.sleep(for: .milliseconds(200))
 
-            withAnimation(.spring(duration: 0.32, bounce: 0.28)) {
+            // The fall itself is nearly bounce-free: the landing impact is sold
+            // by the squash & stretch keyframes in TileView, keyed on `row`.
+            withAnimation(.spring(duration: 0.3, bounce: 0.08)) {
                 engine.applyGravityAndSpawn()
             }
             if chain >= 4 { engine.spawnBomb() }
-            try? await Task.sleep(for: .milliseconds(50))
-            withAnimation(.spring(duration: 0.32, bounce: 0.28)) {
+            try? await Task.sleep(for: .milliseconds(40))
+            withAnimation(.spring(duration: 0.3, bounce: 0.08)) {
                 engine.dropNewTiles()
             }
-            try? await Task.sleep(for: .milliseconds(200))
+            try? await Task.sleep(for: .milliseconds(120))
         }
 
         if !engine.hasValidMoves() {

@@ -9,25 +9,34 @@ struct TileView: View {
     let isGameOver: Bool
     let size: CGFloat
 
-    @State private var shakeTrigger = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var gameOverWave = false
 
-    private var baseScale: CGFloat {
-        if isBombFlashed { return 1.15 }
-        return isSelected ? 0.85 : 1
+    // Squash & stretch when a tile lands after a fall, anchored at the bottom
+    // of the cell so the impact reads as weight, not as a generic scale blip.
+    private struct LandingValues {
+        var sx: CGFloat = 1
+        var sy: CGFloat = 1
     }
 
-    private var baseBrightness: Double {
-        if isBombFlashed { return 0.3 }
-        return isSelected ? 0.12 : 0
-    }
-
-    // Two-phase match pop: a fast opaque bloom + flash, then a collapse that
-    // shrinks and fades out. Driven independently of the cascade's withAnimation
-    // so the bloom always reads before gravity removes the tile.
+    // Match pop: a clean, direct collapse — the tile shrinks away with a
+    // fade. Driven independently of the cascade's withAnimation so it always
+    // completes before gravity removes the tile.
     private struct PopValues {
         var scale: CGFloat = 1
-        var brightness: Double = 0
         var opacity: Double = 1
+    }
+
+    // Game-over "deflate" wave: a small hop + squash that sweeps diagonally
+    // across the board, staggered per tile.
+    private struct WaveValues {
+        var scale: CGFloat = 1
+        var dip: CGFloat = 0
+    }
+
+    private var baseScale: CGFloat {
+        if isBombFlashed { return 1.18 }
+        return isSelected ? 0.88 : 1
     }
 
     var body: some View {
@@ -38,64 +47,87 @@ struct TileView: View {
             .padding(4)
             .overlay {
                 if tile.isBomb && !isBombFlashed {
-                    Circle()
-                        .fill(Palette.espresso)
-                        .frame(width: size * 0.4, height: size * 0.4)
+                    bombCore
                 }
             }
             .frame(width: size, height: size)
             .scaleEffect(baseScale)
-            .brightness(baseBrightness)
-            .animation(.easeOut(duration: 0.15), value: isSelected)
-            .keyframeAnimator(initialValue: CGFloat.zero, trigger: shakeTrigger) { content, value in
-                content.offset(x: value)
+            .brightness(isBombFlashed ? 0.3 : (isSelected ? 0.1 : 0))
+            .animation(
+                isSelected
+                    ? (reduceMotion
+                        ? .easeOut(duration: 0.15)
+                        : .easeInOut(duration: 0.55).repeatForever(autoreverses: true))
+                    : .spring(duration: 0.25, bounce: 0.4),
+                value: isSelected
+            )
+            .keyframeAnimator(initialValue: LandingValues(), trigger: tile.row) { content, v in
+                content.scaleEffect(x: v.sx, y: v.sy, anchor: .bottom)
             } keyframes: { _ in
-                let d: CGFloat = (tile.row + tile.col) % 2 == 0 ? 1 : -1
-                CubicKeyframe(4 * d, duration: 0.15)
-                CubicKeyframe(-3.5 * d, duration: 0.15)
-                CubicKeyframe(3.5 * d, duration: 0.18)
-                CubicKeyframe(-3 * d, duration: 0.18)
-                CubicKeyframe(2.5 * d, duration: 0.2)
-                CubicKeyframe(-2 * d, duration: 0.2)
-                CubicKeyframe(1.5 * d, duration: 0.22)
-                CubicKeyframe(-1 * d, duration: 0.22)
-                CubicKeyframe(0.5 * d, duration: 0.25)
-                CubicKeyframe(-0.2 * d, duration: 0.25)
-                CubicKeyframe(0, duration: 0.3)
-            }
-            .keyframeAnimator(initialValue: CGFloat(1), trigger: tile.row * 8 + tile.col) { content, scale in
-                content.scaleEffect(scale)
-            } keyframes: { _ in
-                LinearKeyframe(1.0, duration: 0.26)
-                SpringKeyframe(0.93, duration: 0.10)
-                SpringKeyframe(1.0, duration: 0.22, spring: .bouncy)
+                KeyframeTrack(\.sx) {
+                    LinearKeyframe(1.0, duration: 0.2)
+                    SpringKeyframe(1.12, duration: 0.07, spring: .snappy)
+                    SpringKeyframe(1.0, duration: 0.25, spring: .bouncy)
+                }
+                KeyframeTrack(\.sy) {
+                    LinearKeyframe(1.0, duration: 0.2)
+                    SpringKeyframe(0.84, duration: 0.07, spring: .snappy)
+                    SpringKeyframe(1.0, duration: 0.25, spring: .bouncy)
+                }
             }
             .keyframeAnimator(initialValue: PopValues(), trigger: tile.isMatched) { content, pop in
                 content
                     .scaleEffect(pop.scale)
-                    .brightness(pop.brightness)
                     .opacity(pop.opacity)
             } keyframes: { _ in
                 KeyframeTrack(\.scale) {
-                    SpringKeyframe(1.35, duration: 0.10, spring: .snappy)
-                    CubicKeyframe(0.2, duration: 0.18)
-                }
-                KeyframeTrack(\.brightness) {
-                    CubicKeyframe(0.18, duration: 0.08)
-                    CubicKeyframe(0, duration: 0.20)
+                    CubicKeyframe(0.0, duration: 0.2)
                 }
                 KeyframeTrack(\.opacity) {
-                    LinearKeyframe(1.0, duration: 0.10)
-                    LinearKeyframe(0.0, duration: 0.18)
+                    LinearKeyframe(1.0, duration: 0.06)
+                    LinearKeyframe(0.0, duration: 0.14)
+                }
+            }
+            .keyframeAnimator(initialValue: WaveValues(), trigger: gameOverWave) { content, v in
+                content
+                    .scaleEffect(v.scale)
+                    .offset(y: v.dip)
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    CubicKeyframe(1.07, duration: 0.12)
+                    SpringKeyframe(0.9, duration: 0.16, spring: .snappy)
+                    SpringKeyframe(1.0, duration: 0.5, spring: .bouncy)
+                }
+                KeyframeTrack(\.dip) {
+                    CubicKeyframe(-7, duration: 0.12)
+                    SpringKeyframe(5, duration: 0.16, spring: .snappy)
+                    SpringKeyframe(0, duration: 0.5, spring: .bouncy)
                 }
             }
             .onChange(of: isGameOver) {
                 if isGameOver {
                     Task {
-                        try? await Task.sleep(for: .milliseconds((tile.row + tile.col) % 5 * 30))
-                        shakeTrigger.toggle()
+                        try? await Task.sleep(for: .milliseconds((tile.row + tile.col) * 45))
+                        gameOverWave.toggle()
                     }
                 }
             }
+    }
+
+    private var bombCore: some View {
+        Group {
+            if reduceMotion {
+                Circle()
+                    .fill(Palette.espresso)
+                    .frame(width: size * 0.4, height: size * 0.4)
+            } else {
+                Circle()
+                    .fill(Palette.espresso)
+                    .frame(width: size * 0.4, height: size * 0.4)
+                    .phaseAnimator([1.0, 1.22]) { dot, pulse in
+                        dot.scaleEffect(pulse)
+                    } animation: { _ in .easeInOut(duration: 0.7) }
+            }
+        }
     }
 }

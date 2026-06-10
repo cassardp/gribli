@@ -28,9 +28,11 @@ struct GameView: View {
                 guard !viewModel.isAnimating, !viewModel.isGameOver, !viewModel.isPaused else { return }
                 let t = value.translation
 
-                // Lock onto one axis once the finger has clearly moved.
+                // Lock onto one axis as soon as the finger direction is
+                // readable. A low threshold keeps the tile glued to the finger
+                // from the first points — no perceptible dead zone.
                 if dragTileId == nil {
-                    guard max(abs(t.width), abs(t.height)) >= 8 else { return }
+                    guard max(abs(t.width), abs(t.height)) >= 4 else { return }
                     dragTileId = tile.id
                     dragAxis = abs(t.width) > abs(t.height) ? .horizontal : .vertical
                 }
@@ -46,10 +48,21 @@ struct GameView: View {
                     axis == .horizontal ? CGSize(width: d, height: 0) : CGSize(width: 0, height: d)
                 }
 
-                // Follow the finger 1:1, clamped to one cell. With no neighbour
-                // that way, allow only a small give against the edge.
-                let limit = hasNeighbor ? tileSize : tileSize * 0.18
-                let pull = min(max(raw, -limit), limit)
+                // Follow the finger 1:1 up to just past the commit threshold,
+                // then rubber-band: the swap never completes under the finger,
+                // so the release always has a visible spring left to play —
+                // even on a fast flick. With no neighbour that way, allow only
+                // a small give against the edge.
+                let pull: CGFloat
+                if hasNeighbor {
+                    let soft = tileSize * 0.55
+                    let mag = abs(raw)
+                    let eased = mag <= soft ? mag : soft + (mag - soft) * 0.25
+                    pull = min(eased, tileSize * 0.75) * (raw >= 0 ? 1 : -1)
+                } else {
+                    let limit = tileSize * 0.18
+                    pull = min(max(raw, -limit), limit)
+                }
                 if hasNeighbor {
                     dragOffsets = [tile.id: offset(pull), viewModel.engine.grid[nr][nc].id: offset(-pull)]
                 } else {
@@ -70,9 +83,15 @@ struct GameView: View {
                 dragPastThreshold = false
                 let t = value.translation
 
-                guard wasLocked, let axis else {
-                    dragOffsets = [:]
-                    if max(abs(t.width), abs(t.height)) < 8 {
+                // A sloppy tap can travel a few points and lock the axis; keep
+                // treating anything under 8pt as a tap, springing the small
+                // residual offset back.
+                let travel = max(abs(t.width), abs(t.height))
+                guard wasLocked, let axis, travel >= 8 else {
+                    withAnimation(.bouncy(duration: 0.25)) {
+                        dragOffsets = [:]
+                    }
+                    if travel < 8 {
                         viewModel.tileTapped(tile)
                     }
                     return
@@ -88,13 +107,14 @@ struct GameView: View {
                 if hasNeighbor && abs(raw) > tileSize * 0.5 {
                     // Commit: the residual offset and the cell change animate
                     // together, so the tile slides into place with no jump.
-                    withAnimation(.snappy(duration: 0.2)) {
+                    // The rubber-band guarantees a real distance to cover here.
+                    withAnimation(.spring(duration: 0.24, bounce: 0.25)) {
                         dragOffsets = [:]
                         viewModel.beginDragSwap(tile, dRow: dRow, dCol: dCol)
                     }
                 } else {
                     // Cancel: spring back to rest.
-                    withAnimation(.bouncy(duration: 0.3)) {
+                    withAnimation(.bouncy(duration: 0.25)) {
                         dragOffsets = [:]
                     }
                 }
@@ -138,6 +158,7 @@ struct GameView: View {
                 ZStack(alignment: .topLeading) {
                     ForEach(viewModel.engine.allTiles) { tile in
                         let extra = dragOffsets[tile.id] ?? .zero
+                        let isDragging = dragTileId == tile.id
                         TileView(
                             tile: tile,
                             color: palette.color(for: tile.type),
@@ -147,11 +168,14 @@ struct GameView: View {
                             isGameOver: viewModel.isGameOver,
                             size: tileSize
                         )
+                        .scaleEffect(isDragging ? 1.07 : 1)
+                        .shadow(color: .black.opacity(isDragging ? 0.22 : 0), radius: 7, y: 4)
+                        .animation(.snappy(duration: 0.18), value: isDragging)
                         .offset(
                             x: CGFloat(tile.col) * tileSize + extra.width,
                             y: CGFloat(tile.row) * tileSize + extra.height
                         )
-                        .zIndex(dragOffsets.keys.contains(tile.id) ? 1 : 0)
+                        .zIndex(tile.isMatched ? 2 : (dragOffsets.keys.contains(tile.id) ? 1 : 0))
                         .transition(.identity)
                         .gesture(tileDragGesture(tile, tileSize: tileSize))
                     }
@@ -355,6 +379,8 @@ struct GameView: View {
     }
 }
 
+// Single discreet halo at the centroid of a matched group: a thin ring that
+// expands and fades out.
 private struct RippleView: View {
     let size: CGFloat
     let color: Color
