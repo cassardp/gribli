@@ -44,8 +44,4 @@ All colors live in `Palette.swift` using hex initializers. Dieter Rams / Braun-i
 
 ## Conventions
 
-- Language: communicate in French, code in English (variables, commits, identifiers)
-- Commits: conventional style in English (`feat:`, `fix:`, `refactor:`, `chore:`)
-- No unnecessary comments, docstrings, or type annotations
-- Minimal changes — don't refactor outside the scope of the task
 - `DeviceId.swift` provides a stable UUID per install (UserDefaults-persisted)
