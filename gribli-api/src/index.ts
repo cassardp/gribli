@@ -130,7 +130,7 @@ async function handleSubmitScore(
 		return json({ error: "Username already taken" }, 409);
 	}
 
-	// Rate limit: 30s between submissions per device_id
+	// Rate limit: 5s between submissions per device_id
 	const lastByDevice = await env.DB.prepare(
 		"SELECT created_at FROM scores WHERE device_id = ? ORDER BY created_at DESC LIMIT 1"
 	)
@@ -139,7 +139,7 @@ async function handleSubmitScore(
 
 	if (lastByDevice) {
 		const elapsed = now - new Date(lastByDevice.created_at).getTime();
-		if (elapsed < 30_000) {
+		if (elapsed < 5_000) {
 			return json({ error: "Too many requests" }, 429);
 		}
 	}
