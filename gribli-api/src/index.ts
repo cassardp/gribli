@@ -74,8 +74,17 @@ async function hashIP(ip: string): Promise<string> {
 async function handleGetScores(env: Env, game: string): Promise<Response> {
 	const { results } = await env.DB.prepare(
 		"SELECT id, game, player_name, score, link, created_at FROM scores WHERE game = ? ORDER BY score DESC LIMIT 100"
-	).bind(game).all();
-	return json(results);
+	).bind(game).all<{ player_name: string }>();
+	const visible = results
+		.map((row) => ({ ...row, player_name: displayName(row.player_name) }))
+		.filter((row) => row.player_name.length > 0);
+	return json(visible);
+}
+
+function displayName(name: string): string {
+	const stripped = name.normalize("NFKC").replace(/[^\p{L}\p{N} '’._!?-]/gu, "");
+	if (stripped === name) return name;
+	return stripped.replace(/\s+/g, " ").trim();
 }
 
 // POST /scores — Submit a score
