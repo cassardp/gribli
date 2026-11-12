@@ -1,3 +1,5 @@
+> **This page has moved to [misericode.com/gribli/support](https://misericode.com/gribli/support).**
+
 # Gribli Support
 
 ## Frequently Asked Questions

@@ -1,3 +1,5 @@
+> **This page has moved to [misericode.com/gribli/terms](https://misericode.com/gribli/terms).**
+
 # Terms of Service
 
 **Last updated:** March 2025

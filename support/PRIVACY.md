@@ -1,3 +1,5 @@
+> **This page has moved to [misericode.com/gribli/privacy](https://misericode.com/gribli/privacy).**
+
 # Privacy Policy
 
 **Last updated:** March 2025
